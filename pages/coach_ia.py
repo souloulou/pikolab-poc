@@ -26,6 +26,7 @@ st.markdown(
 )
 st.sidebar.header("PikoLab")
 st.sidebar.page_link("app.py", label="Analyse", icon="🎨")
+st.sidebar.page_link("pages/scanner.py", label="Scanner", icon="📷")
 st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
 
 # ---- Check prerequisites ----

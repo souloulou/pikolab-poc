@@ -1519,6 +1519,7 @@ def main():
     # ---- Sidebar (visible on desktop) ----
     st.sidebar.header("PikoLab")
     st.sidebar.page_link("app.py", label="Analyse", icon="🎨")
+    st.sidebar.page_link("pages/scanner.py", label="Scanner", icon="📷")
     st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
     st.sidebar.markdown("---")
 
@@ -1945,6 +1946,10 @@ def main():
             st.warning(f"**{score}% match** — {suggestion}")
         else:
             st.error(f"**{score}% match** — {suggestion}")
+
+        st.markdown("---")
+        if st.button("📷 Scanner un vetement en photo", use_container_width=True):
+            st.switch_page("pages/scanner.py")
     tab_idx += 1
 
     # ---- TAB: Conseils ----
