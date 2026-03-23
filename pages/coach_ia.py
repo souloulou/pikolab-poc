@@ -74,19 +74,32 @@ system_prompt = build_coach_system_prompt(
     quiz_data,
 )
 
-# ---- Photo upload for visual advice ----
-photo_upload = st.file_uploader(
-    "Envoyer une photo (vetement, maquillage, tenue...)",
-    type=["jpg", "jpeg", "png", "webp"],
-    key="coach_photo",
-    label_visibility="collapsed",
-)
+# ---- Media inputs (photo + audio) ----
+col_photo, col_audio = st.columns(2)
+with col_photo:
+    photo_upload = st.file_uploader(
+        "Photo",
+        type=["jpg", "jpeg", "png", "webp"],
+        key="coach_photo",
+        label_visibility="collapsed",
+    )
+with col_audio:
+    audio_input = st.audio_input("Parlez a Iris", key="coach_audio", label_visibility="collapsed")
+
 if photo_upload:
-    st.image(photo_upload, caption="Photo envoyee", use_container_width=True)
+    st.image(photo_upload, caption="Photo envoyee", width=250)
 
 # ---- Chat ----
 if "coach_messages" not in st.session_state:
     st.session_state.coach_messages = []
+
+# Handle voice input: send audio to Gemini when recorded
+if audio_input and "last_audio_id" not in st.session_state:
+    st.session_state["last_audio_id"] = id(audio_input)
+    st.session_state["pending_audio"] = audio_input.getvalue()
+elif audio_input and st.session_state.get("last_audio_id") != id(audio_input):
+    st.session_state["last_audio_id"] = id(audio_input)
+    st.session_state["pending_audio"] = audio_input.getvalue()
 
 for msg in st.session_state.coach_messages:
     with st.chat_message(msg["role"]):
@@ -94,12 +107,19 @@ for msg in st.session_state.coach_messages:
             st.image(msg["image"], width=200)
         st.markdown(msg["content"])
 
-if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?"):
-    # Build user message parts (text + optional image)
+# Determine input: text prompt OR pending audio
+prompt = st.chat_input("Ecrivez ou utilisez le micro ci-dessus")
+pending_audio = st.session_state.pop("pending_audio", None)
+
+if prompt or pending_audio:
     has_photo = photo_upload is not None
-    user_display = prompt
+    has_audio = pending_audio is not None
+
+    user_display = prompt or "[Message vocal]"
     if has_photo:
-        user_display = f"[Photo jointe] {prompt}"
+        user_display = f"[Photo jointe] {user_display}"
+    if has_audio and prompt:
+        user_display = f"[Audio + texte] {prompt}"
 
     st.session_state.coach_messages.append({
         "role": "user",
@@ -109,7 +129,10 @@ if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?")
     with st.chat_message("user"):
         if has_photo:
             st.image(photo_upload, width=200)
-        st.markdown(prompt)
+        if has_audio and not prompt:
+            st.markdown("*Message vocal envoye*")
+        else:
+            st.markdown(prompt or "")
 
     with st.chat_message("assistant"):
         try:
@@ -117,23 +140,30 @@ if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?")
             import base64
             client = genai.Client(api_key=ai_key)
 
-            # Build contents with history
             contents = []
             for m in st.session_state.coach_messages[:-1]:
                 role = "model" if m["role"] == "assistant" else "user"
                 parts = [{"text": m["content"]}]
                 contents.append({"role": role, "parts": parts})
 
-            # Current message: text + optional image
-            current_parts = [{"text": prompt}]
+            # Current message: text + optional image + optional audio
+            current_parts = []
+            if has_audio:
+                current_parts.append({
+                    "inline_data": {
+                        "mime_type": "audio/wav",
+                        "data": base64.b64encode(pending_audio).decode(),
+                    }
+                })
             if has_photo:
                 img_bytes = photo_upload.getvalue()
-                current_parts.insert(0, {
+                current_parts.append({
                     "inline_data": {
                         "mime_type": photo_upload.type or "image/jpeg",
                         "data": base64.b64encode(img_bytes).decode(),
                     }
                 })
+            current_parts.append({"text": prompt or "Ecoute mon message vocal et reponds."})
             contents.append({"role": "user", "parts": current_parts})
 
             search_tool = genai_types.Tool(google_search=genai_types.GoogleSearch())
