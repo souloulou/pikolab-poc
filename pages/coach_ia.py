@@ -19,6 +19,11 @@ st.set_page_config(
     layout="centered",
 )
 
+# ---- Sidebar navigation ----
+st.sidebar.header("PikoLab")
+st.sidebar.page_link("app.py", label="Analyse", icon="🎨")
+st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
+
 # ---- Check prerequisites ----
 try:
     ai_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))

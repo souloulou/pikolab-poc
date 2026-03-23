@@ -1396,17 +1396,20 @@ def main():
         page_title="PikoLab — Analyse Colorimetrique",
         page_icon="🎨",
         layout="centered",
-        initial_sidebar_state="collapsed",
+        initial_sidebar_state="auto",
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 
-    # ---- Sidebar ----
-    st.sidebar.header("Mode d'affichage")
+    # ---- Sidebar (visible on desktop) ----
+    st.sidebar.header("PikoLab")
+    st.sidebar.page_link("app.py", label="Analyse", icon="🎨")
+    st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
+    st.sidebar.markdown("---")
+
     view_mode = st.sidebar.radio(
-        "Niveau de detail",
+        "Mode d'affichage",
         ["Client", "Professionnel", "Avance"],
         index=0,
-        help="Client = resultats simples, Pro = coaching styliste, Avance = debug technique",
     )
 
     # Classification params (Avance only)
