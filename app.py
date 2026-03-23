@@ -8,6 +8,7 @@ import os
 import urllib.request
 
 import streamlit as st
+import google.generativeai as genai
 import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python.vision import FaceLandmarker, FaceLandmarkerOptions
@@ -1139,6 +1140,116 @@ def generate_story_image(image_rgb, season, tagline, palette_colors, profile):
     return buf.getvalue()
 
 
+# ============================================================
+# COACH IA (Gemini)
+# ============================================================
+
+def build_coach_system_prompt(season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data):
+    """Build a comprehensive system prompt with all client context."""
+    diag_text = "\n".join(
+        f"- {d['feature']}: {d['title']} — {d['detail']}" for d in diagnostic
+    )
+
+    makeup = advice.get("makeup", {})
+    clothing = advice.get("clothing", {})
+    hair = advice.get("hair", {})
+    acc = advice.get("accessories", {})
+    expert = advice.get("expert", {})
+
+    quiz_text = ""
+    if quiz_data:
+        quiz_text = f"""
+Reponses questionnaire client :
+- Cheveux teints : {quiz_data.get('hair_dyed', 'non renseigne')}
+- Couleur naturelle : {quiz_data.get('natural_hair', 'non renseigne')}
+- Style : {quiz_data.get('style', 'non renseigne')}
+- Environnement travail : {quiz_data.get('work', 'non renseigne')}
+- Couleurs portees : {quiz_data.get('current_colors', 'non renseigne')}
+- Interet principal : {quiz_data.get('interest', 'non renseigne')}
+"""
+
+    return f"""Tu es un coach en image et styliste professionnel specialise en colorimetrie saisonniere.
+Tu aides un(e) client(e) a comprendre et appliquer sa palette de couleurs au quotidien.
+
+PROFIL DU CLIENT :
+- Saison : {season}
+- Description : {advice.get('description', '')}
+- Sous-ton : {profile['undertone']} (score: {profile['raw_undertone']:.2f})
+- Valeur : {profile['depth']}
+- Chroma : {profile['chroma']}
+- Contraste : {profile['contrast']}
+- Cheveux detectes : {hair_info.get('color', 'inconnu')} ({hair_info.get('warmth', '')})
+- Levres : {lip_undertone}
+
+DIAGNOSTIC :
+{diag_text}
+{quiz_text}
+PALETTE RECOMMANDEE :
+- A porter : {advice.get('best_summary', '')}
+- A eviter : {advice.get('avoid_summary', '')}
+- Alternative au noir : {advice.get('black_alt', '')}
+- Alternative au blanc : {advice.get('white_alt', '')}
+- Metaux : {advice.get('metals', '')}
+
+MAQUILLAGE :
+- Fond de teint : {makeup.get('foundation', '')}
+- Levres : {', '.join(makeup.get('lips', []))}
+- Yeux : {', '.join(makeup.get('eyes', []))}
+- Look naturel : {makeup.get('look_naturel', '')}
+- Look soiree : {makeup.get('look_soiree', '')}
+- Look bureau : {makeup.get('look_pro', '')}
+
+VETEMENTS :
+- Combinaisons : {', '.join(clothing.get('best_combinations', []))}
+- Motifs : {clothing.get('patterns', '')}
+- Tissus : {clothing.get('fabrics', '')}
+- Capsule : {', '.join(clothing.get('capsule', []))}
+
+CHEVEUX :
+- Ideaux : {', '.join(hair.get('ideal', []))}
+- A eviter : {', '.join(hair.get('avoid', []))}
+- Conseil : {hair.get('tips', '')}
+
+ACCESSOIRES :
+- Lunettes : {acc.get('glasses', '')}
+- Bijoux : {acc.get('jewelry', '')}
+- Ongles : {acc.get('nails', '')}
+
+REGLES :
+1. Reponds TOUJOURS en francais
+2. Base tes conseils UNIQUEMENT sur la saison et le profil du client ci-dessus
+3. Sois precis et actionnable (noms de couleurs, types de vetements, marques si pertinent)
+4. Si le client demande quelque chose hors de ton expertise, dis-le honnetement
+5. Sois chaleureux, encourageant mais professionnel
+6. Reponds de maniere concise (3-5 phrases max sauf si on te demande du detail)
+7. Si le client mentionne un vetement ou une couleur specifique, dis si ca lui va ou pas et POURQUOI
+"""
+
+
+def get_gemini_model(api_key, system_prompt):
+    """Initialize Gemini model with system prompt."""
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(
+        "gemini-2.0-flash",
+        system_instruction=system_prompt,
+    )
+
+
+def stream_coach_response(model, history, user_message):
+    """Stream a response from Gemini, yielding chunks for st.write_stream."""
+    # Convert history to Gemini format (role: user/model)
+    gemini_history = []
+    for m in history:
+        role = "model" if m["role"] == "assistant" else "user"
+        gemini_history.append({"role": role, "parts": [m["content"]]})
+
+    chat = model.start_chat(history=gemini_history)
+    response = chat.send_message(user_message, stream=True)
+    for chunk in response:
+        if chunk.text:
+            yield chunk.text
+
+
 def render_gauge(value, vmin, vmax, label_left, label_right, title):
     """Horizontal gauge bar for profile dimensions. Mobile-friendly sizing."""
     fig, ax = plt.subplots(figsize=(6, 1.0))
@@ -1512,12 +1623,30 @@ def main():
             st.info("Vos cheveux sont teints — les conseils colorimetriques se basent sur votre couleur NATURELLE pour plus de precision. Votre styliste peut adapter.")
 
     # ---- Tabs by view mode ----
+    # Check if Gemini API key is available
+    has_ai = False
+    try:
+        ai_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+        has_ai = bool(ai_key)
+    except Exception:
+        ai_key = os.environ.get("GEMINI_API_KEY", "")
+        has_ai = bool(ai_key)
+
     if view_mode == "Client":
-        tab_labels = ["Profil", "Essayage", "Conseils", "Photo"]
+        tab_labels = ["Profil", "Essayage", "Conseils"]
+        if has_ai:
+            tab_labels.append("Coach IA")
+        tab_labels.append("Photo")
     elif view_mode == "Professionnel":
-        tab_labels = ["Profil", "Essayage", "Conseils", "Coaching", "Photo"]
+        tab_labels = ["Profil", "Essayage", "Conseils", "Coaching"]
+        if has_ai:
+            tab_labels.append("Coach IA")
+        tab_labels.append("Photo")
     else:  # Avance
-        tab_labels = ["Profil", "Essayage", "Conseils", "Coaching", "Detection", "Debug"]
+        tab_labels = ["Profil", "Essayage", "Conseils", "Coaching"]
+        if has_ai:
+            tab_labels.append("Coach IA")
+        tab_labels += ["Detection", "Debug"]
 
     tabs = st.tabs(tab_labels)
     tab_idx = 0
@@ -1750,6 +1879,57 @@ def main():
                     st.markdown("**Erreurs frequentes du client :**")
                     for m in mistakes:
                         st.markdown(f"- {m}")
+        tab_idx += 1
+
+    # ---- TAB: Coach IA ----
+    if has_ai:
+        with tabs[tab_idx]:
+            st.markdown("### Votre coach colorimetrie personnel")
+            st.caption(
+                "Posez vos questions : tenue pour une occasion, achat en magasin, "
+                "couleur de cheveux, maquillage... Le coach connait votre profil complet."
+            )
+
+            # Build quiz data for context
+            quiz_data = {}
+            if "q_hair" in st.session_state:
+                quiz_data["hair_dyed"] = st.session_state.get("q_hair", "")
+                quiz_data["natural_hair"] = st.session_state.get("q_nat_hair", "")
+                quiz_data["style"] = st.session_state.get("q_style", "")
+                quiz_data["work"] = st.session_state.get("q_work", "")
+                quiz_data["current_colors"] = ", ".join(st.session_state.get("q_colors", []))
+                quiz_data["interest"] = st.session_state.get("q_interest", "")
+
+            system_prompt = build_coach_system_prompt(
+                season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data,
+            )
+
+            # Init chat history
+            if "coach_messages" not in st.session_state:
+                st.session_state.coach_messages = []
+
+            # Display history
+            for msg in st.session_state.coach_messages:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
+
+            # Chat input
+            if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?"):
+                st.session_state.coach_messages.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                with st.chat_message("assistant"):
+                    try:
+                        model = get_gemini_model(ai_key, system_prompt)
+                        response = st.write_stream(
+                            stream_coach_response(model, st.session_state.coach_messages[:-1], prompt)
+                        )
+                        st.session_state.coach_messages.append({"role": "assistant", "content": response})
+                    except Exception as exc:
+                        err_msg = f"Erreur du coach : {exc}"
+                        st.error(err_msg)
+                        st.session_state.coach_messages.append({"role": "assistant", "content": err_msg})
         tab_idx += 1
 
     # ---- TAB: Photo (Client + Pro) ----
