@@ -46,6 +46,17 @@ LEFT_IRIS_IDX = [468, 469, 470, 471, 472]
 RIGHT_IRIS_IDX = [473, 474, 475, 476, 477]
 PUPIL_RATIO = 0.3
 
+# Forehead top boundary (for hair sampling above)
+FOREHEAD_TOP_IDX = [10, 338, 297, 332, 284, 251, 389, 356, 109, 67, 103, 54, 21, 162, 127]
+
+# Lip contour (outer upper + outer lower, forms closed polygon)
+UPPER_LIP_IDX = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291]
+LOWER_LIP_IDX = [291, 375, 321, 405, 314, 17, 84, 181, 91, 146, 61]
+
+# Eyebrow landmarks
+LEFT_EYEBROW_IDX = [70, 63, 105, 66, 107]
+RIGHT_EYEBROW_IDX = [300, 293, 334, 296, 336]
+
 SKIN_WEIGHT = 0.7
 IRIS_WEIGHT = 0.3
 
@@ -199,6 +210,283 @@ def create_iris_mask(shape, landmarks):
         pupil_r = max(1, int(radius * PUPIL_RATIO))
         cv2.circle(mask, center, pupil_r, 0, -1)
     return mask
+
+
+def create_hair_mask(shape, landmarks):
+    """Sample hair by taking a strip above the forehead landmarks."""
+    h, w = shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    top_pts = [landmarks[i] for i in FOREHEAD_TOP_IDX if i < len(landmarks)]
+    if len(top_pts) < 5:
+        return mask
+    min_y = min(p[1] for p in top_pts)
+    xs = [p[0] for p in top_pts]
+    left_x = max(0, min(xs))
+    right_x = min(w, max(xs))
+    hair_h = max(15, int(h * 0.06))
+    top_y = max(0, min_y - hair_h)
+    if right_x - left_x < 20 or min_y - top_y < 5:
+        return mask
+    mask[top_y:min_y, left_x:right_x] = 255
+    return mask
+
+
+def create_lip_mask(shape, landmarks):
+    """Mask for the lip area using outer lip contour."""
+    h, w = shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    upper = [landmarks[i] for i in UPPER_LIP_IDX if i < len(landmarks)]
+    lower = [landmarks[i] for i in LOWER_LIP_IDX if i < len(landmarks)]
+    if len(upper) < 5 or len(lower) < 5:
+        return mask
+    polygon = upper + lower[::-1]
+    pts = np.array(polygon, dtype=np.int32)
+    cv2.fillPoly(mask, [pts], 255)
+    return mask
+
+
+def create_eyebrow_mask(shape, landmarks):
+    """Thin mask along eyebrows for natural hair color estimation."""
+    h, w = shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    for brow_idx in [LEFT_EYEBROW_IDX, RIGHT_EYEBROW_IDX]:
+        pts = [landmarks[i] for i in brow_idx if i < len(landmarks)]
+        if len(pts) < 3:
+            continue
+        arr = np.array(pts, dtype=np.int32)
+        cv2.polylines(mask, [arr], False, 255, 3)
+    return mask
+
+
+def classify_hair_color(lab_stats):
+    """Classify hair into descriptive categories from CIELab stats."""
+    if not lab_stats or lab_stats["L"] == 0:
+        return {"color": "inconnu", "warmth": "neutre", "depth": "moyen"}
+    L, a, b = lab_stats["L"], lab_stats["a"], lab_stats["b"]
+    # Depth
+    if L > 65:
+        depth = "clair"
+    elif L > 40:
+        depth = "moyen"
+    elif L > 25:
+        depth = "fonce"
+    else:
+        depth = "tres fonce"
+    # Warmth
+    if b > 15 and a > 5:
+        warmth = "chaud"
+    elif b < 5:
+        warmth = "froid"
+    else:
+        warmth = "neutre"
+    # Color name
+    if L > 65 and b > 15:
+        color = "blond dore"
+    elif L > 65 and b <= 15:
+        color = "blond cendre"
+    elif L > 40 and b > 15 and a > 10:
+        color = "auburn/roux"
+    elif L > 40 and b > 10:
+        color = "chatain chaud"
+    elif L > 40:
+        color = "chatain froid"
+    elif L > 25 and b > 10:
+        color = "brun chaud"
+    elif L > 25:
+        color = "brun froid"
+    else:
+        color = "noir"
+    return {"color": color, "warmth": warmth, "depth": depth}
+
+
+def classify_lip_undertone(lab_stats):
+    """Determine lip undertone from Lab values."""
+    if not lab_stats or lab_stats["L"] == 0:
+        return "inconnu"
+    a, b = lab_stats["a"], lab_stats["b"]
+    if a > 15 and b > 10:
+        return "chaud (peche/corail)"
+    elif a > 15 and b <= 10:
+        return "froid (rose/berry)"
+    elif a > 8:
+        return "neutre-chaud"
+    else:
+        return "neutre"
+
+
+def generate_personal_diagnostic(skin_stats, iris_stats, hair_info, lip_undertone,
+                                  profile, season, advice, contrast):
+    """Generate feature-by-feature personalized diagnostic."""
+    diag = []
+    season_is_warm = profile["raw_undertone"] > 0
+
+    # --- SKIN ---
+    t = profile["raw_undertone"]
+    if t > 0.4:
+        diag.append({
+            "feature": "Peau",
+            "icon": "🟢",
+            "title": f"Sous-ton chaud marque (b*={skin_stats['b']:.0f})",
+            "detail": "Les bijoux or, les couleurs terreuses et les tons peche vous illuminent naturellement.",
+        })
+    elif t > 0.1:
+        diag.append({
+            "feature": "Peau",
+            "icon": "🟢",
+            "title": f"Sous-ton neutre-chaud (b*={skin_stats['b']:.0f})",
+            "detail": "Vous avez de la flexibilite mais les tons chauds restent vos meilleurs allies.",
+        })
+    elif t > -0.1:
+        diag.append({
+            "feature": "Peau",
+            "icon": "🟡",
+            "title": f"Sous-ton neutre (b*={skin_stats['b']:.0f})",
+            "detail": "Sous-ton equilibre — evitez les extremes (ni trop dore, ni trop rose). Testez les deux metaux pres du visage.",
+        })
+    elif t > -0.4:
+        diag.append({
+            "feature": "Peau",
+            "icon": "🟢",
+            "title": f"Sous-ton neutre-froid (b*={skin_stats['b']:.0f})",
+            "detail": "L'argent et les couleurs froides douces sont vos allies naturels.",
+        })
+    else:
+        diag.append({
+            "feature": "Peau",
+            "icon": "🟢",
+            "title": f"Sous-ton froid marque (b*={skin_stats['b']:.0f})",
+            "detail": "L'argent, le platine et les couleurs froides pures vous subliment.",
+        })
+
+    # --- EYES ---
+    if iris_stats:
+        eye_warm = iris_stats["b"] > 10
+        eye_light = iris_stats["L"] > 40
+        eye_desc = []
+        if eye_light and eye_warm:
+            eye_desc = ["noisette/chauds", "Les fards bronze et cuivre feront ressortir leur chaleur."]
+        elif eye_light and not eye_warm:
+            eye_desc = ["clairs/froids", "Les fards pervenche, argent et taupe subliment vos yeux."]
+        elif not eye_light and eye_warm:
+            eye_desc = ["bruns chauds", "Les fards bronze fonce, olive et cuivre sont vos alliés."]
+        else:
+            eye_desc = ["fonces/froids", "Les fards gris charbon, bleu nuit et prune font ressortir leur profondeur."]
+
+        harmony = "en harmonie" if (eye_warm == season_is_warm) else "en contraste"
+        diag.append({
+            "feature": "Yeux",
+            "icon": "🟢" if eye_warm == season_is_warm else "🟡",
+            "title": f"Yeux {eye_desc[0]} (L*={iris_stats['L']:.0f})",
+            "detail": f"{eye_desc[1]} Vos yeux sont {harmony} avec votre sous-ton de peau.",
+        })
+    else:
+        diag.append({
+            "feature": "Yeux",
+            "icon": "⚪",
+            "title": "Iris non detecte",
+            "detail": "L'analyse se base uniquement sur la peau. Pour plus de precision, assurez-vous que vos yeux sont bien ouverts et visibles.",
+        })
+
+    # --- HAIR ---
+    if hair_info and hair_info["color"] != "inconnu":
+        hair_warm = hair_info["warmth"] == "chaud"
+        hair_match = hair_warm == season_is_warm
+        ideal_colors = advice.get("hair", {}).get("ideal", [])
+
+        if hair_match:
+            diag.append({
+                "feature": "Cheveux",
+                "icon": "🟢",
+                "title": f"Cheveux {hair_info['color']}",
+                "detail": f"Vos cheveux sont en harmonie avec votre saison. Couleurs ideales : {', '.join(ideal_colors[:3])}.",
+            })
+        else:
+            avoid_colors = advice.get("hair", {}).get("avoid", [])
+            diag.append({
+                "feature": "Cheveux",
+                "icon": "🟠",
+                "title": f"Cheveux {hair_info['color']} (decalage detecte)",
+                "detail": (
+                    f"La temperature de vos cheveux ne correspond pas a votre saison. "
+                    f"{'Ils sont peut-etre teints. ' if hair_info['warmth'] != ('chaud' if season_is_warm else 'froid') else ''}"
+                    f"Couleurs recommandees : {', '.join(ideal_colors[:3])}. "
+                    f"A eviter : {', '.join(avoid_colors[:2])}."
+                ),
+            })
+    else:
+        diag.append({
+            "feature": "Cheveux",
+            "icon": "⚪",
+            "title": "Cheveux non detectes",
+            "detail": "La zone capillaire n'a pas pu etre analysee (cheveux couverts, image coupee, ou crane rase).",
+        })
+
+    # --- LIPS ---
+    if lip_undertone and lip_undertone != "inconnu":
+        lip_warm = "chaud" in lip_undertone
+        lip_match = lip_warm == season_is_warm
+        diag.append({
+            "feature": "Levres",
+            "icon": "🟢" if lip_match else "🟡",
+            "title": f"Pigmentation {lip_undertone}",
+            "detail": (
+                "Vos levres confirment votre sous-ton." if lip_match
+                else "La pigmentation de vos levres est legerement differente de votre sous-ton dominant — les rouges a levres recommandes dans votre palette corrigeront cet ecart."
+            ),
+        })
+
+    # --- CONTRAST ---
+    c = profile["raw_contrast"]
+    if c > 0.5:
+        diag.append({
+            "feature": "Contraste",
+            "icon": "🟢",
+            "title": "Contraste eleve",
+            "detail": "Vous pouvez porter des motifs graphiques, du color-blocking et des contrastes forts (noir/blanc, couleurs vives sur fond sombre).",
+        })
+    elif c > 0.25:
+        diag.append({
+            "feature": "Contraste",
+            "icon": "🟢",
+            "title": "Contraste moyen",
+            "detail": "Les motifs moyens et les harmonies ton sur ton avec quelques accents de couleur sont ideaux.",
+        })
+    else:
+        diag.append({
+            "feature": "Contraste",
+            "icon": "🟢",
+            "title": "Contraste bas",
+            "detail": "Privilegiez les harmonies douces, le ton sur ton et les camaieux. Evitez les ruptures brutales de couleur.",
+        })
+
+    # --- OVERALL HARMONY ---
+    features_in_harmony = sum(1 for d in diag if d["icon"] == "🟢")
+    total_features = sum(1 for d in diag if d["icon"] != "⚪")
+    if total_features > 0:
+        harmony_pct = features_in_harmony / total_features
+        if harmony_pct >= 0.8:
+            diag.append({
+                "feature": "Harmonie globale",
+                "icon": "✅",
+                "title": "Excellente coherence",
+                "detail": f"Vos traits (peau, yeux, cheveux) sont en harmonie. Votre classification {season} est fiable.",
+            })
+        elif harmony_pct >= 0.5:
+            diag.append({
+                "feature": "Harmonie globale",
+                "icon": "🟡",
+                "title": "Coherence partielle",
+                "detail": f"Certains traits sont en leger decalage (cheveux teints ?). Votre saison {season} est indicative — consultez un coloriste pour affiner.",
+            })
+        else:
+            diag.append({
+                "feature": "Harmonie globale",
+                "icon": "🟠",
+                "title": "Profil mixte",
+                "detail": f"Vos traits montrent des signaux mixtes. Vous etes peut-etre entre deux saisons. Consultez le top 3 saisons et essayez les palettes des 2 premieres.",
+            })
+
+    return diag
 
 
 # ============================================================
@@ -799,12 +1087,15 @@ def main():
         st.caption("Prenez un selfie ou choisissez une photo pour decouvrir votre palette.")
         return
 
-    # ---- Auto-detect white sheet ----
-    wb_reference = detect_white_region(image_rgb)
-    if wb_reference is not None:
-        st.success("Feuille blanche detectee — calibration couleur activee.")
+    # ---- Auto-detect white sheet (skip for Demo mode) ----
+    if mode == "Demo":
+        wb_reference = None
     else:
-        st.caption("Pas de feuille blanche detectee — resultats approximatifs.")
+        wb_reference = detect_white_region(image_rgb)
+        if wb_reference is not None:
+            st.success("Feuille blanche detectee — calibration couleur activee.")
+        else:
+            st.caption("Pas de feuille blanche detectee — resultats approximatifs.")
 
     # ---- Pipeline with progress ----
     progress = st.progress(0, text="Detection du visage...")
@@ -814,7 +1105,7 @@ def main():
         st.error("Aucun visage detecte. Essayez avec une photo plus nette, de face, bien eclairee.")
         return
 
-    progress.progress(20, text="Extraction des zones de peau et iris...")
+    progress.progress(15, text="Extraction des zones de peau et iris...")
     has_iris = len(landmarks) >= 478
     skin_mask = create_skin_mask(image_rgb.shape, landmarks)
     iris_mask = create_iris_mask(image_rgb.shape, landmarks) if has_iris else np.zeros(
@@ -828,6 +1119,13 @@ def main():
         st.error("Visage trop petit ou mal cadre. Rapprochez-vous de la camera.")
         return
 
+    progress.progress(25, text="Detection cheveux, levres, sourcils...")
+    hair_mask = create_hair_mask(image_rgb.shape, landmarks)
+    lip_mask = create_lip_mask(image_rgb.shape, landmarks)
+    eyebrow_mask = create_eyebrow_mask(image_rgb.shape, landmarks)
+    hair_px = int(np.count_nonzero(hair_mask))
+    lip_px = int(np.count_nonzero(lip_mask))
+
     progress.progress(40, text="Correction des couleurs...")
     if wb_reference is not None:
         corrected = correct_wb_with_reference(image_rgb, wb_reference)
@@ -836,7 +1134,7 @@ def main():
         corrected = correct_exposure(image_rgb, skin_mask)
         correction_method = "Auto"
 
-    progress.progress(60, text="Analyse colorimetrique...")
+    progress.progress(55, text="Analyse colorimetrique peau et iris...")
     skin_pixels_rgb = extract_pixels(corrected, skin_mask)
     skin_lab = pixels_to_lab(skin_pixels_rgb)
     skin_stats = compute_skin_stats(skin_lab)
@@ -844,7 +1142,24 @@ def main():
     iris_pixels_rgb = extract_pixels(corrected, iris_mask)
     iris_stats = extract_iris_dominant(iris_pixels_rgb) if len(iris_pixels_rgb) > 0 else None
 
-    progress.progress(80, text="Classification saisonniere...")
+    progress.progress(70, text="Analyse cheveux et levres...")
+    hair_pixels = extract_pixels(corrected, hair_mask)
+    hair_lab = pixels_to_lab(hair_pixels)
+    hair_stats = compute_skin_stats(hair_lab) if len(hair_lab) > 0 else None
+    hair_info = classify_hair_color(hair_stats)
+
+    lip_pixels = extract_pixels(corrected, lip_mask)
+    lip_lab = pixels_to_lab(lip_pixels)
+    lip_stats = compute_skin_stats(lip_lab) if len(lip_lab) > 0 else None
+    lip_undertone = classify_lip_undertone(lip_stats)
+
+    # Eyebrow color as proxy for natural hair
+    eyebrow_pixels = extract_pixels(corrected, eyebrow_mask)
+    eyebrow_lab = pixels_to_lab(eyebrow_pixels)
+    eyebrow_stats = compute_skin_stats(eyebrow_lab) if len(eyebrow_lab) > 0 else None
+    eyebrow_info = classify_hair_color(eyebrow_stats)
+
+    progress.progress(85, text="Classification saisonniere...")
     scores = compute_scores(skin_stats, iris_stats, params)
     contrast = compute_contrast(skin_stats, iris_stats)
     profile = compute_professional_profile(scores, contrast)
@@ -852,6 +1167,12 @@ def main():
     top3 = classify_top3(scores)
     confidence = compute_confidence(scores)
     advice = SEASON_ADVICE.get(season, {})
+
+    progress.progress(95, text="Diagnostic personnalise...")
+    diagnostic = generate_personal_diagnostic(
+        skin_stats, iris_stats, hair_info, lip_undertone,
+        profile, season, advice, contrast,
+    )
 
     progress.progress(100, text="Analyse terminee !")
     st.session_state["analysis_done"] = True
@@ -986,6 +1307,22 @@ def main():
             icons = advice.get("icons", [])
             if icons:
                 st.caption(f"Meme palette que : {', '.join(icons)}")
+
+        # Personal diagnostic
+        st.markdown("---")
+        st.markdown("### Votre diagnostic personnalise")
+        for d in diagnostic:
+            st.markdown(f"{d['icon']} **{d['feature']}** — {d['title']}")
+            st.caption(d["detail"])
+
+        # Hair & eyebrow info
+        if hair_info["color"] != "inconnu":
+            st.markdown("---")
+            st.markdown(f"**Cheveux detectes** : {hair_info['color']} ({hair_info['warmth']}, {hair_info['depth']})")
+        if eyebrow_info["color"] != "inconnu" and eyebrow_info["color"] != hair_info["color"]:
+            st.caption(f"Sourcils : {eyebrow_info['color']} — si differents des cheveux, c'est souvent un indice de votre couleur naturelle.")
+        if lip_undertone != "inconnu":
+            st.caption(f"Levres : pigmentation {lip_undertone}")
     tab_idx += 1
 
     # ---- TAB: Conseils ----
@@ -1130,12 +1467,28 @@ def main():
     # ---- TABs: Detection + Debug (Avance only) ----
     if view_mode == "Avance":
         with tabs[tab_idx]:  # Detection
-            overlay = render_face_overlay(corrected, skin_mask, iris_mask)
-            st.image(overlay, caption="Zones analysees (vert = peau, bleu = iris)", use_container_width=True)
-            col1, col2, col3 = st.columns(3)
-            col1.metric("Pixels peau", f"{skin_px:,}")
-            col2.metric("Pixels iris", f"{iris_px:,}")
-            col3.metric("Landmarks", f"{len(landmarks)}")
+            # Build extended overlay with all masks
+            overlay = corrected.copy().astype(np.float32)
+            for mask, color in [
+                (skin_mask, [0, 200, 0]),       # green = skin
+                (iris_mask, [100, 100, 255]),    # blue = iris
+                (hair_mask, [255, 165, 0]),      # orange = hair
+                (lip_mask, [255, 50, 100]),      # pink = lips
+                (eyebrow_mask, [180, 120, 60]),  # brown = eyebrows
+            ]:
+                region = mask > 0
+                if region.any():
+                    overlay[region] = overlay[region] * 0.5 + np.array(color, dtype=np.float32) * 0.5
+            overlay = np.clip(overlay, 0, 255).astype(np.uint8)
+            st.image(overlay, caption="Zones detectees", use_container_width=True)
+            st.caption("Vert=peau, Bleu=iris, Orange=cheveux, Rose=levres, Brun=sourcils")
+
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Peau", f"{skin_px:,} px")
+            col2.metric("Iris", f"{iris_px:,} px")
+            col3.metric("Cheveux", f"{hair_px:,} px")
+            col4.metric("Levres", f"{lip_px:,} px")
+
             st.image(image_rgb, caption="Originale", use_container_width=True)
             st.image(corrected, caption=f"Correction ({correction_method})", use_container_width=True)
         tab_idx += 1
