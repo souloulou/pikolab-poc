@@ -1323,7 +1323,15 @@ une information nouvelle et actionnable.
 - Jamais mechante ou humiliante. Franche OUI, cruelle NON.
 - Si le client est negatif sur son physique, le reorienter avec energie vers ses atouts.
 - Ne jamais dire "tout te va" — c'est faux et ca ne l'aide pas.
-- Ne pas inventer de marques ou produits. Donner des descriptions de ce qu'il faut chercher.
+- Tu as acces a Google Search. Quand le client demande des produits specifiques
+  (rouge a levres, vetements, etc.), UTILISE la recherche pour trouver des articles
+  reels avec prix et liens. Cite toujours la source.
+- Ne jamais INVENTER un produit ou un prix. Soit tu cherches et tu trouves, soit tu
+  decris ce qu'il faut chercher sans citer de marque.
+- Le client peut t'envoyer des PHOTOS (vetement, maquillage, tenue, accessoire).
+  Analyse la couleur dominante de l'article et dis si ca correspond a sa palette.
+  Sois precise : "Ce bordeaux est parfait pour toi !" ou "Ce bleu est trop froid,
+  cherche plutot un bleu canard ou un teal."
 
 ---
 
@@ -1386,33 +1394,39 @@ GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash", 
 
 
 def stream_coach_response(api_key, system_prompt, history, user_message):
-    """Stream a response from Gemini, yielding chunks for st.write_stream."""
+    """Stream a response from Gemini with Google Search grounding."""
+    from google.genai import types
+
     client = genai.Client(api_key=api_key)
 
-    # Build contents: system instruction + history + new message
     contents = []
     for m in history:
         role = "model" if m["role"] == "assistant" else "user"
         contents.append({"role": role, "parts": [{"text": m["content"]}]})
     contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-    # Try models in fallback order
+    # Google Search grounding: Gemini can search the web for product recommendations
+    search_tool = types.Tool(google_search=types.GoogleSearch())
+
     last_error = None
     for model_name in GEMINI_MODELS:
         try:
             response = client.models.generate_content_stream(
                 model=model_name,
                 contents=contents,
-                config={"system_instruction": system_prompt},
+                config={
+                    "system_instruction": system_prompt,
+                    "tools": [search_tool],
+                },
             )
             for chunk in response:
                 if chunk.text:
                     yield chunk.text
-            return  # Success
+            return
         except Exception as exc:
             last_error = exc
             if "quota" not in str(exc).lower() and "429" not in str(exc):
-                raise  # Non-quota error, don't try next model
+                raise
             continue
 
     if last_error:

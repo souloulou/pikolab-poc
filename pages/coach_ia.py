@@ -74,27 +74,69 @@ system_prompt = build_coach_system_prompt(
     quiz_data,
 )
 
+# ---- Photo upload for visual advice ----
+photo_upload = st.file_uploader(
+    "Envoyer une photo (vetement, maquillage, tenue...)",
+    type=["jpg", "jpeg", "png", "webp"],
+    key="coach_photo",
+    label_visibility="collapsed",
+)
+if photo_upload:
+    st.image(photo_upload, caption="Photo envoyee", use_container_width=True)
+
 # ---- Chat ----
 if "coach_messages" not in st.session_state:
     st.session_state.coach_messages = []
 
 for msg in st.session_state.coach_messages:
     with st.chat_message(msg["role"]):
+        if msg.get("image"):
+            st.image(msg["image"], width=200)
         st.markdown(msg["content"])
 
 if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?"):
-    st.session_state.coach_messages.append({"role": "user", "content": prompt})
+    # Build user message parts (text + optional image)
+    has_photo = photo_upload is not None
+    user_display = prompt
+    if has_photo:
+        user_display = f"[Photo jointe] {prompt}"
+
+    st.session_state.coach_messages.append({
+        "role": "user",
+        "content": user_display,
+        "image": photo_upload.getvalue() if has_photo else None,
+    })
     with st.chat_message("user"):
+        if has_photo:
+            st.image(photo_upload, width=200)
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         try:
+            from google.genai import types as genai_types
+            import base64
             client = genai.Client(api_key=ai_key)
+
+            # Build contents with history
             contents = []
             for m in st.session_state.coach_messages[:-1]:
                 role = "model" if m["role"] == "assistant" else "user"
-                contents.append({"role": role, "parts": [{"text": m["content"]}]})
-            contents.append({"role": "user", "parts": [{"text": prompt}]})
+                parts = [{"text": m["content"]}]
+                contents.append({"role": role, "parts": parts})
+
+            # Current message: text + optional image
+            current_parts = [{"text": prompt}]
+            if has_photo:
+                img_bytes = photo_upload.getvalue()
+                current_parts.insert(0, {
+                    "inline_data": {
+                        "mime_type": photo_upload.type or "image/jpeg",
+                        "data": base64.b64encode(img_bytes).decode(),
+                    }
+                })
+            contents.append({"role": "user", "parts": current_parts})
+
+            search_tool = genai_types.Tool(google_search=genai_types.GoogleSearch())
 
             response_text = ""
             last_error = None
@@ -103,7 +145,10 @@ if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?")
                     stream = client.models.generate_content_stream(
                         model=model_name,
                         contents=contents,
-                        config={"system_instruction": system_prompt},
+                        config={
+                            "system_instruction": system_prompt,
+                            "tools": [search_tool],
+                        },
                     )
 
                     def _stream():
