@@ -1,0 +1,1060 @@
+"""
+PikoLab PoC — Analyse Colorimetrique Saisonniere
+Determine la palette saisonniere (16 saisons) a partir d'une photo de visage.
+Pipeline : MediaPipe Face Mesh -> masquage peau/iris -> correction couleur -> CIELab -> classification
+"""
+
+import os
+import urllib.request
+
+import streamlit as st
+import mediapipe as mp
+from mediapipe.tasks.python import BaseOptions
+from mediapipe.tasks.python.vision import FaceLandmarker, FaceLandmarkerOptions
+import cv2
+import numpy as np
+from skimage.color import rgb2lab
+from sklearn.cluster import KMeans
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from collections import OrderedDict
+
+from season_advice import SEASON_ADVICE
+
+MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
+MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
+MODEL_PATH = os.path.join(MODEL_DIR, "face_landmarker.task")
+
+
+def ensure_model():
+    """Download the MediaPipe face landmarker model if not already cached."""
+    if os.path.exists(MODEL_PATH):
+        return
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+
+# ============================================================
+# CONSTANTS
+# ============================================================
+
+LEFT_CHEEK_IDX = [234, 93, 132, 58, 172, 136, 150, 149, 176, 148]
+RIGHT_CHEEK_IDX = [454, 323, 361, 288, 397, 365, 379, 378, 400, 377]
+LEFT_IRIS_IDX = [468, 469, 470, 471, 472]
+RIGHT_IRIS_IDX = [473, 474, 475, 476, 477]
+PUPIL_RATIO = 0.3
+
+SKIN_WEIGHT = 0.7
+IRIS_WEIGHT = 0.3
+
+DEFAULTS = {
+    "temp_center": 17.0,
+    "temp_scale": 12.0,
+    "value_center": 55.0,
+    "sat_center": 20.0,
+    "sat_scale": 15.0,
+    "dominance_thresh": 0.3,
+}
+
+# ============================================================
+# 16 SEASON DATA
+# ============================================================
+
+SEASON_PALETTES = OrderedDict({
+    "Light Spring":  ["#FFFDD0", "#FADADD", "#FCD5CE", "#FFE5B4", "#C9E4CA", "#FFDAB9", "#B5EAD7", "#FFB7B2"],
+    "Warm Spring":   ["#E07A5F", "#F2CC8F", "#81B29A", "#F4A261", "#D4A373", "#CCD5AE", "#E9C46A", "#FAEDCD"],
+    "Bright Spring": ["#FF6B35", "#FFD166", "#06D6A0", "#EF476F", "#118AB2", "#FFE66D", "#F77F00", "#43AA8B"],
+    "True Spring":   ["#FF5733", "#FFC300", "#28B463", "#FF69B4", "#00B4D8", "#DAF7A6", "#FF8C00", "#2EC4B6"],
+    "Light Summer":  ["#CDB4DB", "#BDE0FE", "#FFAFCC", "#A2D2FF", "#D0D1FF", "#FFC8DD", "#B8C0FF", "#BBD0FF"],
+    "Cool Summer":   ["#7B9EA8", "#9A8C98", "#C9ADA7", "#4A4E69", "#9CADB7", "#84A98C", "#B5838D", "#6D6875"],
+    "Soft Summer":   ["#B5838D", "#A39BA8", "#8D99AE", "#C9CBA3", "#A8A4CE", "#CEB5A7", "#95B8D1", "#B8B8D1"],
+    "True Summer":   ["#DB7093", "#2A6F97", "#E8E8E8", "#7678ED", "#C77DFF", "#66CDAA", "#1D3557", "#BA68C8"],
+    "Soft Autumn":   ["#C2B280", "#8B8C7A", "#C9ADA7", "#5F7A61", "#A0937D", "#7F6B5D", "#8DAA9D", "#9B8E7E"],
+    "Warm Autumn":   ["#BC6C25", "#DDA15E", "#606C38", "#E76F51", "#6B4423", "#CC5803", "#2D6A4F", "#D4A017"],
+    "Deep Autumn":   ["#6B2737", "#4A5240", "#8B4513", "#5D4037", "#1B5E20", "#8B6914", "#722F37", "#2E4600"],
+    "True Autumn":   ["#D35400", "#6B8E23", "#B7410E", "#795548", "#B8860B", "#A0522D", "#008080", "#C7962A"],
+    "Deep Winter":   ["#1A1A2E", "#E8E8E8", "#CC0000", "#1A5276", "#0B6623", "#FF1493", "#6A0DAD", "#C0C0C0"],
+    "Cool Winter":   ["#B0E0E6", "#DC143C", "#1A1A2E", "#F0F0F0", "#4B0082", "#C71585", "#36454F", "#01796F"],
+    "Bright Winter": ["#0066FF", "#FF1493", "#F8F8FF", "#FFF700", "#8B00FF", "#FF0000", "#00CC44", "#1A1A2E"],
+    "True Winter":   ["#CC0000", "#0000CD", "#1A1A2E", "#F5F5F5", "#00563F", "#FF69B4", "#C0C0C0", "#301934"],
+})
+
+SUBSEASON_RULES = {
+    "Spring": [
+        ("Light Spring",  "value",       "high"),
+        ("Warm Spring",   "temperature", "high"),
+        ("Bright Spring", "saturation",  "high"),
+        ("True Spring",   None,          None),
+    ],
+    "Summer": [
+        ("Light Summer",  "value",       "high"),
+        ("Cool Summer",   "temperature", "low"),
+        ("Soft Summer",   "saturation",  "low"),
+        ("True Summer",   None,          None),
+    ],
+    "Autumn": [
+        ("Soft Autumn",   "saturation",  "low"),
+        ("Warm Autumn",   "temperature", "high"),
+        ("Deep Autumn",   "value",       "low"),
+        ("True Autumn",   None,          None),
+    ],
+    "Winter": [
+        ("Deep Winter",   "value",       "low"),
+        ("Cool Winter",   "temperature", "low"),
+        ("Bright Winter", "saturation",  "high"),
+        ("True Winter",   None,          None),
+    ],
+}
+
+# Centroid scores for each season (temperature, value, saturation)
+SEASON_CENTROIDS = {
+    "Light Spring":  ( 0.3,  0.8,  0.3),
+    "Warm Spring":   ( 0.8,  0.3,  0.3),
+    "Bright Spring": ( 0.4,  0.4,  0.8),
+    "True Spring":   ( 0.5,  0.5,  0.5),
+    "Light Summer":  (-0.3,  0.8, -0.2),
+    "Cool Summer":   (-0.8,  0.3, -0.2),
+    "Soft Summer":   (-0.3,  0.3, -0.7),
+    "True Summer":   (-0.5,  0.5, -0.3),
+    "Soft Autumn":   ( 0.3, -0.3, -0.7),
+    "Warm Autumn":   ( 0.8, -0.3,  0.2),
+    "Deep Autumn":   ( 0.3, -0.8,  0.0),
+    "True Autumn":   ( 0.5, -0.5,  0.0),
+    "Deep Winter":   (-0.3, -0.8,  0.2),
+    "Cool Winter":   (-0.8, -0.3,  0.2),
+    "Bright Winter": (-0.3, -0.3,  0.8),
+    "True Winter":   (-0.5, -0.5,  0.3),
+}
+
+
+# ============================================================
+# FACE DETECTION
+# ============================================================
+
+_landmarker_instance = None
+
+
+def get_face_landmarker():
+    global _landmarker_instance
+    if _landmarker_instance is None:
+        ensure_model()
+        options = FaceLandmarkerOptions(
+            base_options=BaseOptions(model_asset_path=MODEL_PATH),
+            num_faces=1,
+            min_face_detection_confidence=0.5,
+        )
+        _landmarker_instance = FaceLandmarker.create_from_options(options)
+    return _landmarker_instance
+
+
+def detect_face(image_rgb):
+    landmarker = get_face_landmarker()
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=image_rgb)
+    result = landmarker.detect(mp_image)
+    if not result.face_landmarks:
+        return None
+    h, w = image_rgb.shape[:2]
+    return [(int(lm.x * w), int(lm.y * h)) for lm in result.face_landmarks[0]]
+
+
+# ============================================================
+# MASK CREATION
+# ============================================================
+
+def create_polygon_mask(shape, landmarks, indices):
+    h, w = shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    valid = [i for i in indices if i < len(landmarks)]
+    if len(valid) < 3:
+        return mask
+    pts = np.array([landmarks[i] for i in valid], dtype=np.int32)
+    hull = cv2.convexHull(pts)
+    cv2.fillConvexPoly(mask, hull, 255)
+    return mask
+
+
+def create_skin_mask(shape, landmarks):
+    left = create_polygon_mask(shape, landmarks, LEFT_CHEEK_IDX)
+    right = create_polygon_mask(shape, landmarks, RIGHT_CHEEK_IDX)
+    return cv2.bitwise_or(left, right)
+
+
+def create_iris_mask(shape, landmarks):
+    h, w = shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    if len(landmarks) < 478:
+        return mask
+    for iris_idx in [LEFT_IRIS_IDX, RIGHT_IRIS_IDX]:
+        center = landmarks[iris_idx[0]]
+        edges = [landmarks[i] for i in iris_idx[1:]]
+        radius = int(np.mean([
+            np.sqrt((e[0] - center[0]) ** 2 + (e[1] - center[1]) ** 2)
+            for e in edges
+        ]))
+        if radius < 2:
+            continue
+        cv2.circle(mask, center, radius, 255, -1)
+        pupil_r = max(1, int(radius * PUPIL_RATIO))
+        cv2.circle(mask, center, pupil_r, 0, -1)
+    return mask
+
+
+# ============================================================
+# COLOR CORRECTION
+# ============================================================
+
+def detect_white_region(image_rgb):
+    lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
+    l_ch = lab[:, :, 0]
+    a_ch = lab[:, :, 1].astype(int)
+    b_ch = lab[:, :, 2].astype(int)
+    white_mask = (
+        (l_ch > 200) & (np.abs(a_ch - 128) < 15) & (np.abs(b_ch - 128) < 15)
+    ).astype(np.uint8) * 255
+    contours, _ = cv2.findContours(white_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    min_area = image_rgb.shape[0] * image_rgb.shape[1] * 0.02
+    large = [c for c in contours if cv2.contourArea(c) > min_area]
+    if not large:
+        return None
+    biggest = max(large, key=cv2.contourArea)
+    region_mask = np.zeros(image_rgb.shape[:2], dtype=np.uint8)
+    cv2.drawContours(region_mask, [biggest], -1, 255, -1)
+    return np.array(cv2.mean(image_rgb, mask=region_mask)[:3])
+
+
+def correct_wb_with_reference(image_rgb, reference_rgb):
+    gains = 255.0 / (np.array(reference_rgb) + 1e-6)
+    gains = gains / gains.max()
+    corrected = image_rgb.astype(np.float32)
+    for c in range(3):
+        corrected[:, :, c] *= gains[c]
+    return np.clip(corrected, 0, 255).astype(np.uint8)
+
+
+def correct_exposure(image_rgb, skin_mask):
+    """Conservative exposure correction that preserves natural skin tone.
+
+    Only corrects when the image shows clear signs of bad exposure
+    (histogram clipping). Does NOT normalize skin lightness to a fixed
+    target — dark skin stays dark, light skin stays light.
+    """
+    if skin_mask.sum() == 0:
+        return image_rgb
+
+    lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
+    l_ch = lab[:, :, 0].astype(np.float32)
+    skin_l = l_ch[skin_mask > 0]
+
+    median_l = np.median(skin_l)
+    if median_l < 5:
+        return image_rgb
+
+    # Detect exposure problems via histogram clipping
+    pct_clipped_dark = np.mean(skin_l < 15) * 100   # % near black
+    pct_clipped_bright = np.mean(skin_l > 245) * 100  # % near white
+
+    severely_underexposed = pct_clipped_dark > 20 or median_l < 40
+    severely_overexposed = pct_clipped_bright > 15 or median_l > 230
+
+    if not severely_underexposed and not severely_overexposed:
+        # Exposure is acceptable — no correction needed
+        return image_rgb
+
+    # Conservative correction: shift SLIGHTLY toward usable range
+    # NOT toward a fixed target — preserve the natural skin tone
+    if severely_underexposed:
+        # Nudge up by 15-25% (mild gamma < 1)
+        target_l = min(median_l * 1.4, median_l + 40)
+    else:
+        # Nudge down by 15-25% (mild gamma > 1)
+        target_l = max(median_l * 0.7, median_l - 40)
+
+    gamma = np.log(target_l / 255.0) / (np.log(median_l / 255.0) + 1e-6)
+    gamma = np.clip(gamma, 0.7, 1.5)  # Much tighter range than before
+
+    l_corrected = 255.0 * ((l_ch / 255.0) ** gamma)
+    lab[:, :, 0] = np.clip(l_corrected, 0, 255).astype(np.uint8)
+    return cv2.cvtColor(lab, cv2.COLOR_LAB2RGB)
+
+
+# ============================================================
+# COLOR EXTRACTION
+# ============================================================
+
+def extract_pixels(image_rgb, mask):
+    if mask.sum() == 0:
+        return np.array([]).reshape(0, 3)
+    return image_rgb[mask > 0].reshape(-1, 3)
+
+
+def pixels_to_lab(pixels_rgb):
+    if len(pixels_rgb) == 0:
+        return np.array([]).reshape(0, 3)
+    pixels_f = pixels_rgb.astype(np.float64) / 255.0
+    return rgb2lab(pixels_f.reshape(1, -1, 3)).reshape(-1, 3)
+
+
+def compute_skin_stats(lab_pixels):
+    if len(lab_pixels) == 0:
+        return {"L": 0.0, "a": 0.0, "b": 0.0, "C": 0.0}
+    return {
+        "L": float(np.mean(lab_pixels[:, 0])),
+        "a": float(np.mean(lab_pixels[:, 1])),
+        "b": float(np.mean(lab_pixels[:, 2])),
+        "C": float(np.mean(np.sqrt(lab_pixels[:, 1] ** 2 + lab_pixels[:, 2] ** 2))),
+    }
+
+
+def extract_iris_dominant(pixels_rgb):
+    if len(pixels_rgb) < 20:
+        return None
+    k = min(3, max(2, len(pixels_rgb) // 10))
+    kmeans = KMeans(n_clusters=k, n_init=10, random_state=42)
+    kmeans.fit(pixels_rgb)
+    centers_lab = rgb2lab(
+        kmeans.cluster_centers_.reshape(1, -1, 3).astype(np.float64) / 255.0
+    ).reshape(-1, 3)
+    sorted_idx = np.argsort(centers_lab[:, 0])
+    dominant_idx = sorted_idx[1] if k >= 3 else sorted_idx[-1]
+    return {
+        "L": float(centers_lab[dominant_idx, 0]),
+        "a": float(centers_lab[dominant_idx, 1]),
+        "b": float(centers_lab[dominant_idx, 2]),
+        "C": float(np.sqrt(centers_lab[dominant_idx, 1] ** 2 + centers_lab[dominant_idx, 2] ** 2)),
+        "rgb": kmeans.cluster_centers_[dominant_idx].astype(int),
+    }
+
+
+# ============================================================
+# PROFESSIONAL SCORING & CLASSIFICATION
+# ============================================================
+
+def compute_scores(skin_stats, iris_stats, params):
+    """Normalized temperature / value / saturation scores in [-1, 1]."""
+    s_temp = (skin_stats["b"] - params["temp_center"]) / params["temp_scale"]
+    s_val = (skin_stats["L"] - params["value_center"]) / 50.0
+    s_sat = (skin_stats["C"] - params["sat_center"]) / params["sat_scale"]
+
+    if iris_stats:
+        i_temp = iris_stats["b"] / 30.0
+        i_val = (iris_stats["L"] - 40.0) / 40.0
+        i_sat = (iris_stats["C"] - 20.0) / 20.0
+        temperature = SKIN_WEIGHT * s_temp + IRIS_WEIGHT * i_temp
+        value = SKIN_WEIGHT * s_val + IRIS_WEIGHT * i_val
+        saturation = SKIN_WEIGHT * s_sat + IRIS_WEIGHT * i_sat
+    else:
+        temperature = s_temp
+        value = s_val
+        saturation = s_sat
+
+    return {
+        "temperature": float(np.clip(temperature, -1, 1)),
+        "value": float(np.clip(value, -1, 1)),
+        "saturation": float(np.clip(saturation, -1, 1)),
+    }
+
+
+def compute_contrast(skin_stats, iris_stats):
+    """Contrast level between skin and iris (0-1 scale)."""
+    if iris_stats is None:
+        return 0.5  # Unknown, assume medium
+    l_diff = abs(skin_stats["L"] - iris_stats["L"])
+    c_diff = abs(skin_stats["C"] - iris_stats["C"])
+    return float(np.clip((l_diff / 50.0 + c_diff / 30.0) / 2.0, 0, 1))
+
+
+def compute_professional_profile(scores, contrast):
+    """Human-readable 4-dimension profile for stylists."""
+    t = scores["temperature"]
+    v = scores["value"]
+    s = scores["saturation"]
+
+    # Undertone: 5 levels
+    if t > 0.4:
+        undertone = "Chaud"
+    elif t > 0.1:
+        undertone = "Neutre-chaud"
+    elif t > -0.1:
+        undertone = "Neutre"
+    elif t > -0.4:
+        undertone = "Neutre-froid"
+    else:
+        undertone = "Froid"
+
+    # Value: 5 levels
+    if v > 0.5:
+        depth = "Tres clair"
+    elif v > 0.15:
+        depth = "Clair"
+    elif v > -0.15:
+        depth = "Medium"
+    elif v > -0.5:
+        depth = "Fonce"
+    else:
+        depth = "Tres fonce"
+
+    # Chroma: 3 levels
+    if s > 0.3:
+        chroma = "Vif"
+    elif s > -0.3:
+        chroma = "Modere"
+    else:
+        chroma = "Doux"
+
+    # Contrast: 3 levels
+    if contrast > 0.5:
+        contrast_label = "Eleve"
+    elif contrast > 0.25:
+        contrast_label = "Moyen"
+    else:
+        contrast_label = "Bas"
+
+    return {
+        "undertone": undertone,
+        "depth": depth,
+        "chroma": chroma,
+        "contrast": contrast_label,
+        "raw_undertone": t,
+        "raw_depth": v,
+        "raw_chroma": s,
+        "raw_contrast": contrast,
+    }
+
+
+def classify_season(scores, dominance_threshold):
+    """Classify into one of 16 seasons."""
+    temp = scores["temperature"]
+    val = scores["value"]
+
+    if temp > 0 and val > 0:
+        base = "Spring"
+    elif temp <= 0 and val > 0:
+        base = "Summer"
+    elif temp > 0 and val <= 0:
+        base = "Autumn"
+    else:
+        base = "Winter"
+
+    rules = SUBSEASON_RULES[base]
+    best_match = None
+    best_strength = -1.0
+
+    for sub_name, axis, direction in rules:
+        if axis is None:
+            continue
+        score_val = scores[axis]
+        strength = score_val if direction == "high" else -score_val
+        if strength > best_strength:
+            best_strength = strength
+            best_match = sub_name
+
+    if best_strength > dominance_threshold:
+        return best_match
+
+    for sub_name, axis, _ in rules:
+        if axis is None:
+            return sub_name
+    return best_match
+
+
+def classify_top3(scores):
+    """Return top 3 seasons by distance to centroids, with match percentages."""
+    point = np.array([scores["temperature"], scores["value"], scores["saturation"]])
+    distances = {}
+    for name, centroid in SEASON_CENTROIDS.items():
+        dist = np.linalg.norm(point - np.array(centroid))
+        distances[name] = dist
+
+    sorted_seasons = sorted(distances.items(), key=lambda x: x[1])
+
+    # Convert distances to match percentages (inverse, normalized)
+    max_dist = max(d for _, d in sorted_seasons[:5]) + 0.01
+    top3 = []
+    total_score = 0
+    for name, dist in sorted_seasons[:3]:
+        score = max(0, (max_dist - dist) / max_dist)
+        top3.append((name, score, dist))
+        total_score += score
+
+    # Normalize to percentages
+    result = []
+    for name, score, dist in top3:
+        pct = (score / total_score * 100) if total_score > 0 else 33.3
+        result.append({"season": name, "match_pct": round(pct, 1), "distance": round(dist, 3)})
+
+    return result
+
+
+def compute_confidence(scores):
+    temp_dist = abs(scores["temperature"])
+    value_dist = abs(scores["value"])
+    return round(min(1.0, (temp_dist + value_dist) / 2.0 + 0.3), 2)
+
+
+# ============================================================
+# VISUALIZATION
+# ============================================================
+
+def render_face_overlay(image_rgb, skin_mask, iris_mask):
+    overlay = image_rgb.copy().astype(np.float32)
+    skin_region = skin_mask > 0
+    overlay[skin_region] = overlay[skin_region] * 0.6 + np.array([0, 200, 0], dtype=np.float32) * 0.4
+    iris_region = iris_mask > 0
+    overlay[iris_region] = overlay[iris_region] * 0.5 + np.array([100, 100, 255], dtype=np.float32) * 0.5
+    return np.clip(overlay, 0, 255).astype(np.uint8)
+
+
+def render_radar_chart(scores, season_name):
+    labels = [
+        "Temperature\n(froid | chaud)",
+        "Valeur\n(sombre | clair)",
+        "Saturation\n(doux | vif)",
+    ]
+    values = [scores["temperature"], scores["value"], scores["saturation"]]
+    angles = np.linspace(0, 2 * np.pi, len(labels), endpoint=False).tolist()
+    values_plot = values + values[:1]
+    angles_plot = angles + angles[:1]
+
+    fig, ax = plt.subplots(figsize=(6, 6), subplot_kw=dict(polar=True))
+    ax.plot(angles_plot, values_plot, "o-", linewidth=2.5, color="#E07A5F", markersize=8)
+    ax.fill(angles_plot, values_plot, alpha=0.25, color="#E07A5F")
+    ax.set_xticks(angles)
+    ax.set_xticklabels(labels, fontsize=11)
+    ax.set_ylim(-1, 1)
+    ax.set_title(season_name, fontsize=16, fontweight="bold", pad=20)
+    ax.axhline(y=0, color="grey", linewidth=0.5, linestyle="--")
+    plt.tight_layout()
+    return fig
+
+
+def render_categorized_palette(season_name, advice):
+    """Render 3 rows: neutrals, accents, to avoid."""
+    rows = [
+        ("Neutres (base)", advice.get("palette_neutrals", []), "#2d6a4f"),
+        ("Accents", advice.get("palette_accents", []), "#e07a5f"),
+        ("A eviter", advice.get("palette_avoid", []), "#d62828"),
+    ]
+    fig, axes = plt.subplots(3, 1, figsize=(10, 5.5))
+    for ax, (label, colors, title_color) in zip(axes, rows):
+        if not colors:
+            ax.axis("off")
+            continue
+        for i, color in enumerate(colors):
+            rect = mpatches.FancyBboxPatch(
+                (i * 1.15, 0), 1.05, 1.05,
+                boxstyle="round,pad=0.06",
+                facecolor=color,
+                edgecolor="#333333",
+                linewidth=0.5,
+            )
+            ax.add_patch(rect)
+            ax.text(i * 1.15 + 0.525, -0.3, color, ha="center", va="top", fontsize=7, color="#666")
+        ax.set_xlim(-0.3, max(len(colors), 1) * 1.15 + 0.2)
+        ax.set_ylim(-0.6, 1.5)
+        ax.set_aspect("equal")
+        ax.axis("off")
+        ax.set_title(label, fontsize=12, fontweight="bold", color=title_color, loc="left")
+    plt.tight_layout()
+    return fig
+
+
+def render_palette(season_name):
+    colors = SEASON_PALETTES.get(season_name, [])
+    if not colors:
+        return None
+    fig, ax = plt.subplots(figsize=(len(colors) * 1.2, 1.8))
+    for i, color in enumerate(colors):
+        rect = mpatches.FancyBboxPatch(
+            (i * 1.1, 0), 1, 1,
+            boxstyle="round,pad=0.05",
+            facecolor=color,
+            edgecolor="#333333",
+            linewidth=0.5,
+        )
+        ax.add_patch(rect)
+        ax.text(i * 1.1 + 0.5, -0.3, color, ha="center", va="top", fontsize=7, color="#555555")
+    ax.set_xlim(-0.2, len(colors) * 1.1 + 0.1)
+    ax.set_ylim(-0.6, 1.3)
+    ax.set_aspect("equal")
+    ax.axis("off")
+    ax.set_title(f"Palette — {season_name}", fontsize=12, fontweight="bold")
+    plt.tight_layout()
+    return fig
+
+
+def render_lab_histograms(lab_pixels, title="Distribution CIELab"):
+    fig, axes = plt.subplots(1, 3, figsize=(12, 3))
+    channels = [
+        ("L*", 0, (0, 100), "#555555"),
+        ("a*", 1, (-50, 50), "#E07A5F"),
+        ("b*", 2, (-50, 50), "#E9C46A"),
+    ]
+    for ax, (name, idx, rng, color) in zip(axes, channels):
+        data = lab_pixels[:, idx] if len(lab_pixels) > 0 else []
+        ax.hist(data, bins=50, range=rng, color=color, alpha=0.7, edgecolor="white")
+        ax.set_title(name, fontsize=11)
+        ax.set_xlabel("Valeur")
+        ax.set_ylabel("Pixels")
+        if len(lab_pixels) > 0:
+            mean_val = np.mean(lab_pixels[:, idx])
+            ax.axvline(x=mean_val, color="red", linestyle="--", linewidth=1.5, label=f"Moy={mean_val:.1f}")
+            ax.legend(fontsize=8)
+    fig.suptitle(title, fontsize=12, fontweight="bold")
+    plt.tight_layout()
+    return fig
+
+
+def render_gauge(value, vmin, vmax, label_left, label_right, title):
+    """Horizontal gauge bar for profile dimensions. Mobile-friendly sizing."""
+    fig, ax = plt.subplots(figsize=(8, 1.2))
+    normalized = (value - vmin) / (vmax - vmin)
+    normalized = np.clip(normalized, 0, 1)
+
+    # Background bar
+    ax.barh(0, 1, height=0.5, color="#E8E8E8", left=0)
+    # Gradient fill up to value
+    gradient_color = plt.cm.RdYlBu_r(normalized)
+    ax.barh(0, normalized, height=0.5, color=gradient_color, left=0)
+    # Marker
+    ax.plot(normalized, 0, "v", color="#333", markersize=16, zorder=5)
+
+    ax.set_xlim(-0.02, 1.02)
+    ax.set_ylim(-0.6, 0.6)
+    ax.set_yticks([])
+    ax.set_xticks([0, 0.5, 1])
+    ax.set_xticklabels([label_left, "", label_right], fontsize=12)
+    ax.set_title(title, fontsize=13, fontweight="bold", loc="left")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_visible(False)
+    plt.tight_layout()
+    return fig
+
+
+# ============================================================
+# STREAMLIT APP
+# ============================================================
+
+MAX_DIMENSION = 1280  # Resize large images to speed up processing
+
+
+def load_image(uploaded_file):
+    """Load image from upload, handle large files, return RGB numpy array."""
+    data = uploaded_file.getvalue()
+    arr = np.frombuffer(data, np.uint8)
+    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+
+    if img is None:
+        return None
+
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    # Resize if too large (iPhone photos can be 4000+ px)
+    h, w = img.shape[:2]
+    if max(h, w) > MAX_DIMENSION:
+        scale = MAX_DIMENSION / max(h, w)
+        img = cv2.resize(img, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+
+    return img
+
+
+MOBILE_CSS = "<style>\n" \
+    "@media (max-width: 768px) {\n" \
+    "  [data-testid='stHorizontalBlock'] { flex-direction: column !important; gap: 0.5rem !important; }\n" \
+    "  [data-testid='stHorizontalBlock'] > div { width: 100% !important; flex: 1 1 100% !important; }\n" \
+    "  button, [data-testid='stFileUploader'] { min-height: 48px !important; }\n" \
+    "  h1 { font-size: 1.5rem !important; }\n" \
+    "  h2 { font-size: 1.25rem !important; }\n" \
+    "  h3 { font-size: 1.1rem !important; }\n" \
+    "  [data-testid='stTabs'] [role='tablist'] { overflow-x: auto !important; flex-wrap: nowrap !important; -webkit-overflow-scrolling: touch; }\n" \
+    "  [data-testid='stTabs'] [role='tab'] { white-space: nowrap !important; font-size: 0.85rem !important; padding: 0.5rem 0.75rem !important; }\n" \
+    "  [data-testid='stSidebar'] { min-width: 0 !important; }\n" \
+    "  [data-testid='stCameraInput'] { width: 100% !important; }\n" \
+    "  [data-testid='stMetric'] { padding: 0.25rem !important; }\n" \
+    "}\n" \
+    "[data-testid='stCameraInput'] video { max-height: 40vh; object-fit: cover; }\n" \
+    "</style>"
+
+
+def main():
+    st.set_page_config(
+        page_title="PikoLab — Analyse Saisonniere",
+        layout="wide",
+        initial_sidebar_state="collapsed",
+    )
+    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+    st.title("PikoLab PoC — Analyse Colorimetrique Saisonniere")
+    st.caption("Determination de la palette saisonniere (16 saisons) a partir d'une photo de visage")
+
+    # ---- Sidebar ----
+    st.sidebar.header("Configuration")
+    mode = st.sidebar.radio("Mode d'acquisition", ["Upload", "Webcam", "Demo"])
+
+    st.sidebar.header("Seuils de classification")
+    with st.sidebar.expander("Parametres avances", expanded=False):
+        temp_center = st.slider("Temperature neutre (b*)", 5.0, 30.0, DEFAULTS["temp_center"], 0.5)
+        temp_scale = st.slider("Echelle temperature", 5.0, 25.0, DEFAULTS["temp_scale"], 0.5)
+        value_center = st.slider("Valeur mediane (L*)", 30.0, 70.0, DEFAULTS["value_center"], 1.0)
+        sat_center = st.slider("Saturation mediane (C*)", 5.0, 35.0, DEFAULTS["sat_center"], 0.5)
+        sat_scale = st.slider("Echelle saturation", 5.0, 25.0, DEFAULTS["sat_scale"], 0.5)
+        dominance_thresh = st.slider("Seuil de dominance", 0.05, 0.60, DEFAULTS["dominance_thresh"], 0.05)
+
+    params = {
+        "temp_center": temp_center,
+        "temp_scale": temp_scale,
+        "value_center": value_center,
+        "sat_center": sat_center,
+        "sat_scale": sat_scale,
+    }
+
+    # ---- Acquisition ----
+    image_rgb = None
+
+    GUIDE_PHOTO = """
+**Comment prendre votre photo ?**
+
+Pour de meilleurs resultats, tenez une **feuille A4 blanche** a cote de votre visage.
+Elle sera detectee automatiquement et servira a corriger les couleurs de l'eclairage.
+
+**Preparation :**
+1. Prenez une feuille **A4 blanche classique** (papier imprimante, pas creme ni recycle)
+2. Placez-vous pres d'une **fenetre** avec de la lumiere naturelle (pas de soleil direct)
+3. Eteignez les lampes artificielles (plafonniers, lampes de bureau)
+4. Retirez vos **lunettes** et tout **maquillage**
+5. Desactivez les **filtres** et le **mode beaute** de votre telephone
+
+**La photo :**
+- Tenez la feuille **a cote de votre visage**, visible dans le cadre
+- La feuille doit occuper **au moins 1/5 de l'image**
+- Evitez les ombres sur la feuille
+- Visage **de face**, regardez l'objectif
+- Cheveux attaches si possible
+- Fond neutre (evitez les murs colores)
+
+*La feuille est optionnelle mais fortement recommandee pour des resultats precis.*
+"""
+
+    if mode == "Upload":
+        with st.expander("Guide : comment prendre votre photo", expanded=False):
+            st.markdown(GUIDE_PHOTO)
+
+        input_method = st.radio(
+            "Source de la photo",
+            ["Fichier (galerie)", "Appareil photo"],
+            horizontal=True,
+            key="upload_method",
+        )
+        if input_method == "Fichier (galerie)":
+            uploaded = st.file_uploader(
+                "Votre photo (avec feuille blanche si possible)",
+                type=["jpg", "jpeg", "png", "webp", "heic", "heif"],
+            )
+            if uploaded:
+                image_rgb = load_image(uploaded)
+                if image_rgb is None:
+                    st.error(
+                        "Format d'image non reconnu. "
+                        "Si vous etes sur iPhone, allez dans Reglages > Appareil photo > Formats "
+                        "et selectionnez 'Le plus compatible' pour prendre des photos en JPEG."
+                    )
+        else:
+            st.caption("Tenez une feuille blanche A4 a cote de votre visage pour de meilleurs resultats.")
+            camera_photo = st.camera_input("Prenez votre photo")
+            if camera_photo:
+                image_rgb = load_image(camera_photo)
+
+    elif mode == "Demo":
+        st.markdown("**Mode Demo** — Visage genere aleatoirement via IA")
+        if st.button("Generer un visage aleatoire", type="primary", use_container_width=True):
+            with st.spinner("Telechargement..."):
+                try:
+                    req = urllib.request.Request(
+                        "https://thispersondoesnotexist.com",
+                        headers={"User-Agent": "PikoLab-PoC/1.0"},
+                    )
+                    with urllib.request.urlopen(req, timeout=15) as resp:
+                        data = resp.read()
+                    arr = np.frombuffer(data, np.uint8)
+                    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                    st.session_state["demo_image"] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                except Exception as exc:
+                    st.error(f"Echec du telechargement : {exc}")
+
+        if "demo_image" in st.session_state:
+            image_rgb = st.session_state["demo_image"]
+
+    else:  # Webcam mode
+        with st.expander("Guide : comment prendre votre photo", expanded=True):
+            st.markdown(GUIDE_PHOTO)
+
+        st.caption("Tenez une feuille blanche A4 a cote de votre visage pour de meilleurs resultats.")
+        face_photo = st.camera_input("Prenez votre photo")
+        if face_photo:
+            image_rgb = load_image(face_photo)
+
+    if image_rgb is None:
+        st.info("Chargez une image ou prenez une photo pour commencer l'analyse.")
+        return
+
+    # ---- Auto-detect white sheet in the image ----
+    wb_reference = detect_white_region(image_rgb)
+    if wb_reference is not None:
+        st.success(
+            f"Photo recue ({image_rgb.shape[1]}x{image_rgb.shape[0]} px) — "
+            f"Feuille blanche detectee. Calibration couleur activee."
+        )
+    else:
+        st.info(
+            f"Photo recue ({image_rgb.shape[1]}x{image_rgb.shape[0]} px) — "
+            f"Pas de feuille blanche detectee. Resultats approximatifs. "
+            f"Pour plus de precision, reprenez la photo avec une feuille A4 blanche visible."
+        )
+
+    # ---- Pipeline ----
+    with st.spinner("Detection du visage et extraction des couleurs..."):
+        landmarks = detect_face(image_rgb)
+        if landmarks is None:
+            st.error("Aucun visage detecte. Essayez avec une photo plus nette, de face, bien eclairee.")
+            return
+
+        has_iris = len(landmarks) >= 478
+        skin_mask = create_skin_mask(image_rgb.shape, landmarks)
+        iris_mask = create_iris_mask(image_rgb.shape, landmarks) if has_iris else np.zeros(
+            image_rgb.shape[:2], dtype=np.uint8
+        )
+        skin_px = int(np.count_nonzero(skin_mask))
+        iris_px = int(np.count_nonzero(iris_mask))
+
+        if skin_px < 100:
+            st.error("Trop peu de pixels de peau detectes.")
+            return
+
+        if wb_reference is not None:
+            corrected = correct_wb_with_reference(image_rgb, wb_reference)
+            correction_method = "Feuille blanche (white balance)"
+        else:
+            corrected = correct_exposure(image_rgb, skin_mask)
+            correction_method = "Exposition seule (approximatif)"
+
+        skin_pixels_rgb = extract_pixels(corrected, skin_mask)
+        skin_lab = pixels_to_lab(skin_pixels_rgb)
+        skin_stats = compute_skin_stats(skin_lab)
+
+        iris_pixels_rgb = extract_pixels(corrected, iris_mask)
+        iris_stats = extract_iris_dominant(iris_pixels_rgb) if len(iris_pixels_rgb) > 0 else None
+
+        scores = compute_scores(skin_stats, iris_stats, params)
+        contrast = compute_contrast(skin_stats, iris_stats)
+        profile = compute_professional_profile(scores, contrast)
+        season = classify_season(scores, dominance_thresh)
+        top3 = classify_top3(scores)
+        confidence = compute_confidence(scores)
+        advice = SEASON_ADVICE.get(season, {})
+
+    # ---- Display: 5 tabs ----
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📸 Acquisition",
+        "📊 Profil colorimetrique",
+        "👔 Conseils",
+        "🎭 Detection",
+        "🔬 Debug",
+    ])
+
+    # ---- TAB 1: Acquisition ----
+    with tab1:
+        col1, col2 = st.columns(2)
+        col1.image(image_rgb, caption="Image originale", use_container_width=True)
+        col2.image(corrected, caption=f"Apres correction ({correction_method})", use_container_width=True)
+        st.markdown(
+            f"**Dimensions** : {image_rgb.shape[1]}x{image_rgb.shape[0]} px — "
+            f"**Correction** : {correction_method}"
+        )
+
+    # ---- TAB 2: Profil colorimetrique (CLIENT) ----
+    with tab2:
+        st.markdown(f"## Votre saison : **{season}**")
+        if advice:
+            st.markdown(f"*{advice.get('description', '')}*")
+        st.markdown(f"Confiance : **{confidence:.0%}**")
+
+        st.markdown("---")
+
+        # 4 gauge bars
+        st.markdown("### Votre profil en 4 dimensions")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            fig = render_gauge(profile["raw_undertone"], -1, 1, "Froid", "Chaud",
+                               f"Sous-ton : {profile['undertone']}")
+            st.pyplot(fig)
+            plt.close(fig)
+
+            fig = render_gauge(profile["raw_chroma"], -1, 1, "Doux", "Vif",
+                               f"Chroma : {profile['chroma']}")
+            st.pyplot(fig)
+            plt.close(fig)
+
+        with col2:
+            fig = render_gauge(profile["raw_depth"], -1, 1, "Fonce", "Clair",
+                               f"Valeur : {profile['depth']}")
+            st.pyplot(fig)
+            plt.close(fig)
+
+            fig = render_gauge(profile["raw_contrast"], 0, 1, "Bas", "Eleve",
+                               f"Contraste : {profile['contrast']}")
+            st.pyplot(fig)
+            plt.close(fig)
+
+        st.markdown("---")
+
+        # Top 3 seasons
+        st.markdown("### Correspondance saisons")
+        for i, entry in enumerate(top3):
+            icon = "🥇" if i == 0 else ("🥈" if i == 1 else "🥉")
+            bar_pct = entry["match_pct"]
+            st.markdown(f"{icon} **{entry['season']}** — {bar_pct:.1f}%")
+            st.progress(bar_pct / 100.0)
+
+    # ---- TAB 3: Conseils (CLIENT) ----
+    with tab3:
+        if not advice:
+            st.warning(f"Pas de conseils disponibles pour {season}.")
+        else:
+            st.markdown(f"## Conseils pour **{season}**")
+            st.markdown(f"*{advice.get('description', '')}*")
+
+            # Palette categorisee
+            st.markdown("### Palette")
+            fig_pal = render_categorized_palette(season, advice)
+            st.pyplot(fig_pal)
+            plt.close(fig_pal)
+
+            st.markdown(f"**Metaux** : {advice.get('metals', '')}")
+
+            st.markdown("---")
+
+            # Maquillage
+            makeup = advice.get("makeup", {})
+            st.markdown("### Maquillage")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Fond de teint** : {makeup.get('foundation', '')}")
+                st.markdown(f"**Sourcils** : {makeup.get('eyebrows', '')}")
+                lips = makeup.get("lips", [])
+                if lips:
+                    st.markdown(f"**Levres** : {', '.join(lips)}")
+            with col2:
+                eyes = makeup.get("eyes", [])
+                if eyes:
+                    st.markdown(f"**Yeux** : {', '.join(eyes)}")
+                blush = makeup.get("blush", [])
+                if blush:
+                    st.markdown(f"**Blush** : {', '.join(blush)}")
+
+            st.markdown("---")
+
+            # Vetements
+            clothing = advice.get("clothing", {})
+            st.markdown("### Vetements")
+            combos = clothing.get("best_combinations", [])
+            if combos:
+                st.markdown("**Meilleures combinaisons :**")
+                for combo in combos:
+                    st.markdown(f"- {combo}")
+            st.markdown(f"**Motifs** : {clothing.get('patterns', '')}")
+            st.markdown(f"**Tissus** : {clothing.get('fabrics', '')}")
+            st.info(f"💡 **Contraste** : {clothing.get('contrast_tip', '')}")
+
+            st.markdown("---")
+
+            # Cheveux
+            hair = advice.get("hair", {})
+            st.markdown("### Cheveux")
+            col1, col2 = st.columns(2)
+            with col1:
+                ideal = hair.get("ideal", [])
+                if ideal:
+                    st.markdown("**Couleurs ideales :**")
+                    for h in ideal:
+                        st.markdown(f"- ✅ {h}")
+            with col2:
+                avoid = hair.get("avoid", [])
+                if avoid:
+                    st.markdown("**A eviter :**")
+                    for h in avoid:
+                        st.markdown(f"- ❌ {h}")
+
+            st.markdown("---")
+
+            # Accessoires
+            acc = advice.get("accessories", {})
+            st.markdown("### Accessoires")
+            st.markdown(f"**Lunettes** : {acc.get('glasses', '')}")
+            st.markdown(f"**Bijoux** : {acc.get('jewelry', '')}")
+            st.markdown(f"**Sacs & chaussures** : {acc.get('bags_shoes', '')}")
+
+    # ---- TAB 4: Detection ----
+    with tab4:
+        overlay = render_face_overlay(corrected, skin_mask, iris_mask)
+        st.image(overlay, caption="Zones analysees (vert = peau, bleu = iris)", use_container_width=True)
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Pixels peau", f"{skin_px:,}")
+        col2.metric("Pixels iris", f"{iris_px:,}")
+        col3.metric("Landmarks", f"{len(landmarks)}")
+        if not has_iris:
+            st.warning("Landmarks iris non disponibles. Analyse basee uniquement sur la peau.")
+
+    # ---- TAB 5: Debug ----
+    with tab5:
+        st.subheader("Valeurs CIELab — Peau")
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("L* (luminosite)", f"{skin_stats['L']:.1f}")
+        col2.metric("a* (vert/rouge)", f"{skin_stats['a']:.1f}")
+        col3.metric("b* (bleu/jaune)", f"{skin_stats['b']:.1f}")
+        col4.metric("C* (chroma)", f"{skin_stats['C']:.1f}")
+
+        fig_hist = render_lab_histograms(skin_lab, "Distribution CIELab — Peau")
+        st.pyplot(fig_hist)
+        plt.close(fig_hist)
+
+        if iris_stats:
+            st.subheader("Couleur dominante — Iris")
+            col1, col2, col3, col4, col5 = st.columns(5)
+            col1.metric("L*", f"{iris_stats['L']:.1f}")
+            col2.metric("a*", f"{iris_stats['a']:.1f}")
+            col3.metric("b*", f"{iris_stats['b']:.1f}")
+            col4.metric("C*", f"{iris_stats['C']:.1f}")
+            iris_rgb = iris_stats["rgb"]
+            col5.color_picker(
+                "Couleur iris",
+                f"#{iris_rgb[0]:02x}{iris_rgb[1]:02x}{iris_rgb[2]:02x}",
+                disabled=True,
+            )
+
+        st.subheader("Radar des scores")
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            fig_radar = render_radar_chart(scores, season)
+            st.pyplot(fig_radar)
+            plt.close(fig_radar)
+        with col2:
+            st.markdown("**Scores bruts**")
+            st.markdown(f"- Temperature : {scores['temperature']:+.3f}")
+            st.markdown(f"- Valeur : {scores['value']:+.3f}")
+            st.markdown(f"- Saturation : {scores['saturation']:+.3f}")
+            st.markdown(f"- Contraste : {contrast:.3f}")
+            st.markdown(f"**Seuil dominance** : {dominance_thresh}")
+
+        st.subheader("Distances aux 16 saisons")
+        point = np.array([scores["temperature"], scores["value"], scores["saturation"]])
+        all_distances = []
+        for name, centroid in SEASON_CENTROIDS.items():
+            dist = np.linalg.norm(point - np.array(centroid))
+            all_distances.append({"Saison": name, "Distance": round(dist, 3)})
+        all_distances.sort(key=lambda x: x["Distance"])
+        st.dataframe(all_distances, use_container_width=True, hide_index=True)
+
+
+if __name__ == "__main__":
+    main()
