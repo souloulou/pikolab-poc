@@ -1043,101 +1043,125 @@ def compute_color_compatibility(color_hex, season_palettes_all, season_name):
 def generate_story_image(image_rgb, season, tagline, palette_colors, profile):
     """Generate a 1080x1920 story image for sharing."""
     from PIL import Image, ImageDraw, ImageFont
+    import io
+    import textwrap
 
     W, H = 1080, 1920
+    MARGIN = 60
     story = Image.new("RGB", (W, H), "#FFFFFF")
     draw = ImageDraw.Draw(story)
 
-    # Parse primary color
     pc = palette_colors[0] if palette_colors else "#E07A5F"
+    pc_rgb = tuple(int(pc.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
 
-    # Background gradient strip at top
-    for y in range(300):
-        alpha = y / 300
-        r = int(int(pc[1:3], 16) * (1 - alpha) + 255 * alpha)
-        g = int(int(pc[3:5], 16) * (1 - alpha) + 255 * alpha)
-        b = int(int(pc[5:7], 16) * (1 - alpha) + 255 * alpha)
-        draw.line([(0, y), (W, y)], fill=(r, g, b))
-
-    # Photo (centered, circular crop)
-    photo = Image.fromarray(image_rgb)
-    size = 500
-    photo = photo.resize((size, size), Image.LANCZOS)
-
-    # Circular mask
-    mask = Image.new("L", (size, size), 0)
-    mask_draw = ImageDraw.Draw(mask)
-    mask_draw.ellipse([0, 0, size, size], fill=255)
-
-    # Paste photo centered
-    x_offset = (W - size) // 2
-    y_offset = 180
-    story.paste(photo, (x_offset, y_offset), mask)
-
-    # Circle border
-    draw.ellipse(
-        [x_offset - 3, y_offset - 3, x_offset + size + 3, y_offset + size + 3],
-        outline=pc, width=4,
-    )
-
-    # Season name
+    # Fonts
     try:
-        font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 64)
-        font_med = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
-        font_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
+        font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 72)
+        font_med = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 32)
+        font_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 26)
+        font_xs = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 22)
     except (OSError, IOError):
         font_big = ImageFont.load_default()
         font_med = font_big
         font_sm = font_big
+        font_xs = font_big
 
-    y_text = y_offset + size + 40
-    bbox = draw.textbbox((0, 0), season, font=font_big)
-    tw = bbox[2] - bbox[0]
-    draw.text(((W - tw) // 2, y_text), season, fill=pc, font=font_big)
+    # --- Gradient header ---
+    for y in range(350):
+        a = y / 350
+        r = int(pc_rgb[0] * (1 - a) + 255 * a)
+        g = int(pc_rgb[1] * (1 - a) + 255 * a)
+        b = int(pc_rgb[2] * (1 - a) + 255 * a)
+        draw.line([(0, y), (W, y)], fill=(r, g, b))
 
-    # Tagline
-    y_text += 80
-    bbox = draw.textbbox((0, 0), tagline, font=font_med)
-    tw = bbox[2] - bbox[0]
-    draw.text(((W - tw) // 2, y_text), tagline, fill="#666666", font=font_med)
-
-    # Profile summary
-    y_text += 70
-    profile_text = (
-        f"Sous-ton: {profile['undertone']}  |  Valeur: {profile['depth']}  |  "
-        f"Chroma: {profile['chroma']}  |  Contraste: {profile['contrast']}"
+    # --- Photo circle ---
+    photo = Image.fromarray(image_rgb)
+    size = 420
+    photo = photo.resize((size, size), Image.LANCZOS)
+    mask = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(mask).ellipse([0, 0, size, size], fill=255)
+    x_photo = (W - size) // 2
+    y_photo = 200
+    story.paste(photo, (x_photo, y_photo), mask)
+    draw.ellipse(
+        [x_photo - 4, y_photo - 4, x_photo + size + 4, y_photo + size + 4],
+        outline=pc, width=5,
     )
-    bbox = draw.textbbox((0, 0), profile_text, font=font_sm)
-    tw = bbox[2] - bbox[0]
-    draw.text(((W - tw) // 2, y_text), profile_text, fill="#888888", font=font_sm)
 
-    # Palette swatches
-    y_palette = y_text + 80
-    swatch_size = 90
-    gap = 15
+    # --- Season name ---
+    y_cur = y_photo + size + 50
+    _draw_centered(draw, season, y_cur, W, font_big, pc)
+
+    # --- Tagline (wrapped) ---
+    y_cur += 90
+    for line in textwrap.wrap(tagline, width=35):
+        _draw_centered(draw, line, y_cur, W, font_med, "#666666")
+        y_cur += 42
+
+    # --- Profile: 2x2 grid ---
+    y_cur += 30
+    _draw_centered(draw, "Votre profil", y_cur, W, font_sm, "#333333")
+    y_cur += 45
+
+    items = [
+        (f"Sous-ton: {profile['undertone']}", f"Valeur: {profile['depth']}"),
+        (f"Chroma: {profile['chroma']}", f"Contraste: {profile['contrast']}"),
+    ]
+    for left_text, right_text in items:
+        mid = W // 2
+        # Left
+        bbox = draw.textbbox((0, 0), left_text, font=font_sm)
+        lw = bbox[2] - bbox[0]
+        draw.text((mid - lw - 20, y_cur), left_text, fill="#888888", font=font_sm)
+        # Right
+        draw.text((mid + 20, y_cur), right_text, fill="#888888", font=font_sm)
+        y_cur += 40
+
+    # --- Palette: 2 rows of 4 ---
+    y_cur += 40
+    _draw_centered(draw, "Votre palette", y_cur, W, font_sm, "#333333")
+    y_cur += 45
+
+    swatch = 105
+    gap = 18
     n = min(len(palette_colors), 8)
-    total_w = n * swatch_size + (n - 1) * gap
-    x_start = (W - total_w) // 2
+    cols = 4
+    for row_start in range(0, n, cols):
+        row_colors = palette_colors[row_start:row_start + cols]
+        row_w = len(row_colors) * swatch + (len(row_colors) - 1) * gap
+        x_start = (W - row_w) // 2
+        for j, hex_c in enumerate(row_colors):
+            x = x_start + j * (swatch + gap)
+            draw.rounded_rectangle(
+                [x, y_cur, x + swatch, y_cur + swatch],
+                radius=12, fill=hex_c, outline="#DDDDDD", width=1,
+            )
+        y_cur += swatch + gap
 
-    draw.text((x_start, y_palette - 5), "Votre palette", fill="#333333", font=font_sm)
-    y_palette += 40
+    # --- Best/Avoid summary ---
+    y_cur += 20
+    # These come from advice but we keep it simple
+    _draw_centered(draw, "pikolab.app", y_cur + 80, W, font_xs, "#CCCCCC")
 
-    for i, hex_color in enumerate(palette_colors[:n]):
-        x = x_start + i * (swatch_size + gap)
-        draw.rounded_rectangle(
-            [x, y_palette, x + swatch_size, y_palette + swatch_size],
-            radius=10, fill=hex_color, outline="#CCCCCC",
-        )
+    # --- Bottom gradient ---
+    for y in range(H - 100, H):
+        a = (y - (H - 100)) / 100
+        r = int(255 * (1 - a) + pc_rgb[0] * 0.3 * a)
+        g = int(255 * (1 - a) + pc_rgb[1] * 0.3 * a)
+        b = int(255 * (1 - a) + pc_rgb[2] * 0.3 * a)
+        draw.line([(0, y), (W, y)], fill=(int(r), int(g), int(b)))
 
-    # Footer
-    draw.text((W // 2 - 80, H - 80), "PikoLab", fill="#CCCCCC", font=font_med)
-
-    # Convert to bytes
-    import io
     buf = io.BytesIO()
-    story.save(buf, format="PNG", quality=95)
+    story.save(buf, format="PNG")
     buf.seek(0)
     return buf.getvalue()
+
+
+def _draw_centered(draw, text, y, width, font, fill):
+    """Draw text centered horizontally."""
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw = bbox[2] - bbox[0]
+    draw.text(((width - tw) // 2, y), text, fill=fill, font=font)
 
 
 # ============================================================
@@ -1679,19 +1703,12 @@ def main():
 
     if view_mode == "Client":
         tab_labels = ["Profil", "Essayage", "Conseils"]
-        if has_ai:
-            tab_labels.append("Coach IA")
         tab_labels.append("Photo")
     elif view_mode == "Professionnel":
         tab_labels = ["Profil", "Essayage", "Conseils", "Coaching"]
-        if has_ai:
-            tab_labels.append("Coach IA")
         tab_labels.append("Photo")
     else:  # Avance
-        tab_labels = ["Profil", "Essayage", "Conseils", "Coaching"]
-        if has_ai:
-            tab_labels.append("Coach IA")
-        tab_labels += ["Detection", "Debug"]
+        tab_labels = ["Profil", "Essayage", "Conseils", "Coaching", "Detection", "Debug"]
 
     tabs = st.tabs(tab_labels)
     tab_idx = 0
@@ -1926,58 +1943,7 @@ def main():
                         st.markdown(f"- {m}")
         tab_idx += 1
 
-    # ---- TAB: Coach IA ----
-    if has_ai:
-        with tabs[tab_idx]:
-            st.markdown("### Votre coach colorimetrie personnel")
-            st.caption(
-                "Posez vos questions : tenue pour une occasion, achat en magasin, "
-                "couleur de cheveux, maquillage... Le coach connait votre profil complet."
-            )
-
-            # Build quiz data for context
-            quiz_data = {}
-            if "q_hair" in st.session_state:
-                quiz_data["hair_dyed"] = st.session_state.get("q_hair", "")
-                quiz_data["natural_hair"] = st.session_state.get("q_nat_hair", "")
-                quiz_data["style"] = st.session_state.get("q_style", "")
-                quiz_data["work"] = st.session_state.get("q_work", "")
-                quiz_data["current_colors"] = ", ".join(st.session_state.get("q_colors", []))
-                quiz_data["interest"] = st.session_state.get("q_interest", "")
-
-            system_prompt = build_coach_system_prompt(
-                season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data,
-            )
-
-            # Init chat history
-            if "coach_messages" not in st.session_state:
-                st.session_state.coach_messages = []
-
-            # Display history
-            for msg in st.session_state.coach_messages:
-                with st.chat_message(msg["role"]):
-                    st.markdown(msg["content"])
-
-            # Chat input
-            if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?"):
-                st.session_state.coach_messages.append({"role": "user", "content": prompt})
-                with st.chat_message("user"):
-                    st.markdown(prompt)
-
-                with st.chat_message("assistant"):
-                    try:
-                        response = st.write_stream(
-                            stream_coach_response(
-                                ai_key, system_prompt,
-                                st.session_state.coach_messages[:-1], prompt,
-                            )
-                        )
-                        st.session_state.coach_messages.append({"role": "assistant", "content": response})
-                    except Exception as exc:
-                        err_msg = f"Erreur du coach : {exc}"
-                        st.error(err_msg)
-                        st.session_state.coach_messages.append({"role": "assistant", "content": err_msg})
-        tab_idx += 1
+    # Coach IA is rendered AFTER tabs (below) to avoid tab-switch on chat rerun
 
     # ---- TAB: Photo (Client + Pro) ----
     if view_mode in ["Client", "Professionnel"]:
@@ -2056,6 +2022,54 @@ def main():
                 all_distances.append({"Saison": name, "Distance": round(dist, 3)})
             all_distances.sort(key=lambda x: x["Distance"])
             st.dataframe(all_distances, use_container_width=True, hide_index=True)
+
+    # ---- COACH IA (outside tabs to avoid tab-switch on rerun) ----
+    if has_ai:
+        st.markdown("---")
+        st.markdown("### Coach Iris — votre styliste IA")
+        st.caption(
+            "Posez vos questions : tenue pour une occasion, shopping, "
+            "maquillage, cheveux... Iris connait votre profil complet."
+        )
+
+        quiz_data = {}
+        if "q_hair" in st.session_state:
+            quiz_data["hair_dyed"] = st.session_state.get("q_hair", "")
+            quiz_data["natural_hair"] = st.session_state.get("q_nat_hair", "")
+            quiz_data["style"] = st.session_state.get("q_style", "")
+            quiz_data["work"] = st.session_state.get("q_work", "")
+            quiz_data["current_colors"] = ", ".join(st.session_state.get("q_colors", []))
+            quiz_data["interest"] = st.session_state.get("q_interest", "")
+
+        system_prompt = build_coach_system_prompt(
+            season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data,
+        )
+
+        if "coach_messages" not in st.session_state:
+            st.session_state.coach_messages = []
+
+        for msg in st.session_state.coach_messages:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+
+        if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?"):
+            st.session_state.coach_messages.append({"role": "user", "content": prompt})
+            with st.chat_message("user"):
+                st.markdown(prompt)
+
+            with st.chat_message("assistant"):
+                try:
+                    response = st.write_stream(
+                        stream_coach_response(
+                            ai_key, system_prompt,
+                            st.session_state.coach_messages[:-1], prompt,
+                        )
+                    )
+                    st.session_state.coach_messages.append({"role": "assistant", "content": response})
+                except Exception as exc:
+                    err_msg = f"Erreur du coach : {exc}"
+                    st.error(err_msg)
+                    st.session_state.coach_messages.append({"role": "assistant", "content": err_msg})
 
 
 if __name__ == "__main__":
