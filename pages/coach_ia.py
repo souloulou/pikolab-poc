@@ -8,9 +8,10 @@ import os
 import streamlit as st
 from google import genai
 
-# Import shared functions
+# Import shared functions from parent directory
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app import build_coach_system_prompt, GEMINI_MODELS
 
 st.set_page_config(

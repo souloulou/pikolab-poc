@@ -12,7 +12,8 @@ import streamlit as st
 from sklearn.cluster import KMeans
 from skimage.color import rgb2lab
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from app import (
     SEASON_PALETTES,
     detect_white_region,
