@@ -495,24 +495,79 @@ def generate_personal_diagnostic(skin_stats, iris_stats, hair_info, lip_underton
 # ============================================================
 
 def detect_white_region(image_rgb):
+    """Detect a white paper sheet. Strict criteria to avoid false positives.
+
+    Requirements:
+    - Large bright neutral area (>5% of image)
+    - Roughly rectangular shape (solidity > 0.7)
+    - Very neutral color (low chroma in LAB)
+    - Mean brightness very high (L > 220 in OpenCV LAB)
+    """
+    h, w = image_rgb.shape[:2]
     lab = cv2.cvtColor(image_rgb, cv2.COLOR_RGB2LAB)
     l_ch = lab[:, :, 0]
     a_ch = lab[:, :, 1].astype(int)
     b_ch = lab[:, :, 2].astype(int)
+
+    # Strict thresholds: very bright AND very neutral
     white_mask = (
-        (l_ch > 200) & (np.abs(a_ch - 128) < 15) & (np.abs(b_ch - 128) < 15)
+        (l_ch > 210)
+        & (np.abs(a_ch - 128) < 10)
+        & (np.abs(b_ch - 128) < 10)
     ).astype(np.uint8) * 255
+
+    # Morphological cleanup to remove noise
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+    white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_OPEN, kernel)
+    white_mask = cv2.morphologyEx(white_mask, cv2.MORPH_CLOSE, kernel)
+
     contours, _ = cv2.findContours(white_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not contours:
         return None
-    min_area = image_rgb.shape[0] * image_rgb.shape[1] * 0.02
-    large = [c for c in contours if cv2.contourArea(c) > min_area]
-    if not large:
-        return None
-    biggest = max(large, key=cv2.contourArea)
-    region_mask = np.zeros(image_rgb.shape[:2], dtype=np.uint8)
-    cv2.drawContours(region_mask, [biggest], -1, 255, -1)
-    return np.array(cv2.mean(image_rgb, mask=region_mask)[:3])
+
+    # Minimum 5% of image area (was 2% — too permissive)
+    min_area = h * w * 0.05
+    img_area = h * w
+
+    for contour in sorted(contours, key=cv2.contourArea, reverse=True):
+        area = cv2.contourArea(contour)
+        if area < min_area:
+            break
+
+        # Max 40% of image (a wall is too big to be a sheet of paper)
+        if area > img_area * 0.40:
+            continue
+
+        # Rectangularity check: solidity (area / convex hull area)
+        hull = cv2.convexHull(contour)
+        hull_area = cv2.contourArea(hull)
+        if hull_area == 0:
+            continue
+        solidity = area / hull_area
+        if solidity < 0.7:
+            continue
+
+        # Aspect ratio check: paper is roughly rectangular, not a thin strip
+        x, y, rw, rh = cv2.boundingRect(contour)
+        aspect = max(rw, rh) / (min(rw, rh) + 1)
+        if aspect > 5:
+            continue  # Too elongated (probably a wall edge or ceiling)
+
+        # Verify mean color is truly white (very high L, very neutral a/b)
+        region_mask = np.zeros((h, w), dtype=np.uint8)
+        cv2.drawContours(region_mask, [contour], -1, 255, -1)
+        mean_l = cv2.mean(l_ch, mask=region_mask)[0]
+        mean_a = cv2.mean(a_ch.astype(np.uint8), mask=region_mask)[0]
+        mean_b = cv2.mean(b_ch.astype(np.uint8), mask=region_mask)[0]
+
+        if mean_l < 220:
+            continue  # Not bright enough
+        if abs(mean_a - 128) > 8 or abs(mean_b - 128) > 8:
+            continue  # Not neutral enough
+
+        return np.array(cv2.mean(image_rgb, mask=region_mask)[:3])
+
+    return None
 
 
 def correct_wb_with_reference(image_rgb, reference_rgb):
@@ -1374,6 +1429,8 @@ def load_image(uploaded_file):
 
 
 MOBILE_CSS = "<style>\n" \
+    "/* Hide Streamlit auto-generated page navigation */\n" \
+    "[data-testid='stSidebarNav'] { display: none !important; }\n" \
     "@media (max-width: 768px) {\n" \
     "  [data-testid='stHorizontalBlock'] { flex-direction: column !important; gap: 0.5rem !important; }\n" \
     "  [data-testid='stHorizontalBlock'] > div { width: 100% !important; flex: 1 1 100% !important; }\n" \
@@ -1452,9 +1509,10 @@ def main():
         "*La feuille est optionnelle mais recommandee.*"
     )
 
-    # ---- Hero section when no image yet ----
+    # ---- Hero section (only before first analysis) ----
+    hero_placeholder = st.empty()
     if "analysis_done" not in st.session_state:
-        st.markdown("""
+        hero_placeholder.markdown("""
         ## Decouvrez votre palette de couleurs
         Prenez un selfie et obtenez instantanement votre **saison colorimetrique**
         avec des conseils personnalises : maquillage, vetements, cheveux et accessoires.
@@ -1514,17 +1572,23 @@ def main():
         st.caption("Prenez un selfie ou choisissez une photo pour decouvrir votre palette.")
         return
 
-    # ---- Auto-detect white sheet (skip for Demo mode) ----
-    if mode == "Demo":
-        wb_reference = None
-    else:
-        wb_reference = detect_white_region(image_rgb)
-        if wb_reference is not None:
-            st.success("Feuille blanche detectee — calibration couleur activee.")
-        else:
-            st.caption("Pas de feuille blanche detectee — resultats approximatifs.")
+    # ---- White sheet calibration ----
+    wb_reference = None
+    if mode != "Demo":
+        has_sheet = st.checkbox(
+            "J'ai une feuille blanche visible sur la photo",
+            value=False,
+            key="has_white_sheet",
+        )
+        if has_sheet:
+            wb_reference = detect_white_region(image_rgb)
+            if wb_reference is not None:
+                st.success("Feuille blanche detectee — calibration couleur activee.")
+            else:
+                st.warning("Feuille blanche non trouvee. Verifiez qu'elle est bien visible, eclairee et sans ombre.")
 
     # ---- Pipeline with progress ----
+    hero_placeholder.empty()
     progress = st.progress(0, text="Detection du visage...")
     landmarks = detect_face(image_rgb)
     if landmarks is None:
@@ -1616,7 +1680,9 @@ def main():
     c1 = season_colors[0]
     c2 = season_colors[1] if len(season_colors) > 1 else c1
 
-    if confidence >= 0.7:
+    if mode == "Demo":
+        conf_text = "Demonstration"
+    elif confidence >= 0.7:
         conf_text = "Resultat fiable"
     elif confidence >= 0.5:
         conf_text = "Resultat indicatif"
@@ -1798,7 +1864,8 @@ def main():
         # Free draping tool (all modes)
         st.markdown("---")
         st.markdown("### Testez une couleur")
-        test_color = st.color_picker("Choisissez une couleur a essayer", "#E07A5F", key="drape_picker")
+        default_test = good_hex[0] if good_hex else "#E07A5F"
+        test_color = st.color_picker("Choisissez une couleur a essayer", default_test, key="drape_picker")
         draped = render_drape(image_rgb, landmarks, test_color)
         st.image(draped, caption=f"Draping {test_color}", use_container_width=True)
 

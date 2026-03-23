@@ -87,9 +87,11 @@ def skin_tone_image():
 
 @pytest.fixture
 def white_sheet_image():
-    """Image with a big white rectangle (simulates white paper)."""
-    img = np.full((300, 300, 3), [90, 75, 60], dtype=np.uint8)
-    img[30:270, 30:270] = [250, 248, 246]
+    """Image with a white rectangle simulating A4 paper (~20% of image)."""
+    img = np.full((500, 500, 3), [90, 75, 60], dtype=np.uint8)
+    # White rectangle: ~20% of image area (250000 * 0.20 = 50000 px)
+    # 200x250 = 50000 px
+    img[50:300, 150:350] = [252, 252, 252]
     return img
 
 

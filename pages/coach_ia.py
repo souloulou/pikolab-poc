@@ -19,7 +19,11 @@ st.set_page_config(
     layout="centered",
 )
 
-# ---- Sidebar navigation ----
+# Hide auto-generated page nav + custom sidebar
+st.markdown(
+    "<style>[data-testid='stSidebarNav'] { display: none !important; }</style>",
+    unsafe_allow_html=True,
+)
 st.sidebar.header("PikoLab")
 st.sidebar.page_link("app.py", label="Analyse", icon="🎨")
 st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
