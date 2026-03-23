@@ -1536,6 +1536,12 @@ def main():
     st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
     st.sidebar.markdown("---")
 
+    if st.sidebar.button("Nouvelle analyse", use_container_width=True):
+        for key in ["analysis_done", "ctx", "coach_messages", "demo_image",
+                     "last_scan", "guide_shown", "has_white_sheet"]:
+            st.session_state.pop(key, None)
+        st.rerun()
+
     view_mode = st.sidebar.radio(
         "Mode d'affichage",
         ["Client", "Professionnel", "Avance"],
