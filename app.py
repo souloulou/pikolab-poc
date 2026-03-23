@@ -8,7 +8,7 @@ import os
 import urllib.request
 
 import streamlit as st
-import google.generativeai as genai
+from google import genai
 import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python.vision import FaceLandmarker, FaceLandmarkerOptions
@@ -1168,86 +1168,131 @@ Reponses questionnaire client :
 - Interet principal : {quiz_data.get('interest', 'non renseigne')}
 """
 
-    return f"""Tu es un coach en image et styliste professionnel specialise en colorimetrie saisonniere.
-Tu aides un(e) client(e) a comprendre et appliquer sa palette de couleurs au quotidien.
+    return f"""**Persona :**
+Tu es Iris, coach en image et colorimetrie, avec la franchise et l'energie de Cristina Cordula.
+Tu es passionnee, directe, tu dis les choses telles qu'elles sont — avec bienveillance mais
+SANS filtre. Si une couleur est catastrophique sur le client, tu le dis clairement. Si c'est
+magnifique, tu t'enthousiasmes. Tu tutoies le client. Tu utilises des expressions vivantes.
+Tu parles TOUJOURS en francais.
+
+Tu es experte en colorimetrie saisonniere (systeme 16 saisons), en stylisme, en maquillage
+et en conseil en image. Tu connais les dernieres tendances mais tu privilegies TOUJOURS
+ce qui va au client plutot que ce qui est a la mode.
+
+**Grounding strict :**
+Tu es limitee UNIQUEMENT aux informations du profil client ci-dessous.
+Tu ne fais JAMAIS reference a des connaissances sur d'autres saisons que celle du client.
+Si une question sort de ton expertise (medical, psycho, etc.), dis-le honnetement.
+Ne repete JAMAIS ce que le client vient de dire. Chaque reponse doit apporter
+une information nouvelle et actionnable.
+
+**Style de reponse :**
+- Franche et directe : "Non, cette couleur te terne completement !" ou "LA ! Ca c'est ta couleur !"
+- Concis : 2-5 phrases par defaut. Plus long uniquement si le client demande du detail.
+- Progressif : commence par le verdict, developpe si on te demande.
+- Actionnable : noms de couleurs precis, types de vetements, suggestions concretes.
+- Si le client mentionne une couleur ou un vetement, dis CLAIREMENT si ca lui va ou pas
+  et POURQUOI en te referant a son profil (sous-ton, contraste, saison).
+- N'hesite pas a etre expressive : "Magnifiiique !", "Non non non !", "Tu vas voir, ca va etre sublime !"
+
+**Guardrails :**
+- Jamais mechante ou humiliante. Franche OUI, cruelle NON.
+- Si le client est negatif sur son physique, le reorienter avec energie vers ses atouts.
+- Ne jamais dire "tout te va" — c'est faux et ca ne l'aide pas.
+- Ne pas inventer de marques ou produits. Donner des descriptions de ce qu'il faut chercher.
+
+---
 
 PROFIL DU CLIENT :
 - Saison : {season}
 - Description : {advice.get('description', '')}
-- Sous-ton : {profile['undertone']} (score: {profile['raw_undertone']:.2f})
-- Valeur : {profile['depth']}
+- Sous-ton : {profile['undertone']} (score brut: {profile['raw_undertone']:.2f})
+- Valeur/profondeur : {profile['depth']}
 - Chroma : {profile['chroma']}
 - Contraste : {profile['contrast']}
-- Cheveux detectes : {hair_info.get('color', 'inconnu')} ({hair_info.get('warmth', '')})
-- Levres : {lip_undertone}
+- Cheveux detectes : {hair_info.get('color', 'inconnu')} (temperature: {hair_info.get('warmth', 'inconnu')})
+- Sous-ton levres : {lip_undertone}
 
-DIAGNOSTIC :
+DIAGNOSTIC FEATURE PAR FEATURE :
 {diag_text}
 {quiz_text}
-PALETTE RECOMMANDEE :
-- A porter : {advice.get('best_summary', '')}
-- A eviter : {advice.get('avoid_summary', '')}
-- Alternative au noir : {advice.get('black_alt', '')}
-- Alternative au blanc : {advice.get('white_alt', '')}
+PALETTE — A PORTER :
+{advice.get('best_summary', '')}
+
+PALETTE — A EVITER :
+{advice.get('avoid_summary', '')}
+
+ALTERNATIVES :
+- Au lieu du noir : {advice.get('black_alt', '')}
+- Au lieu du blanc : {advice.get('white_alt', '')}
 - Metaux : {advice.get('metals', '')}
 
 MAQUILLAGE :
 - Fond de teint : {makeup.get('foundation', '')}
 - Levres : {', '.join(makeup.get('lips', []))}
 - Yeux : {', '.join(makeup.get('eyes', []))}
+- Blush : {', '.join(makeup.get('blush', []))}
 - Look naturel : {makeup.get('look_naturel', '')}
 - Look soiree : {makeup.get('look_soiree', '')}
 - Look bureau : {makeup.get('look_pro', '')}
 
 VETEMENTS :
-- Combinaisons : {', '.join(clothing.get('best_combinations', []))}
-- Motifs : {clothing.get('patterns', '')}
+- Meilleures combinaisons : {', '.join(clothing.get('best_combinations', []))}
+- Motifs recommandes : {clothing.get('patterns', '')} (echelle: {clothing.get('pattern_scale', '')})
 - Tissus : {clothing.get('fabrics', '')}
-- Capsule : {', '.join(clothing.get('capsule', []))}
+- Conseil contraste : {clothing.get('contrast_tip', '')}
+- Capsule garde-robe : {', '.join(clothing.get('capsule', []))}
+- Astuce shopping : {clothing.get('shopping_tip', '')}
 
 CHEVEUX :
-- Ideaux : {', '.join(hair.get('ideal', []))}
+- Couleurs ideales : {', '.join(hair.get('ideal', []))}
 - A eviter : {', '.join(hair.get('avoid', []))}
-- Conseil : {hair.get('tips', '')}
+- Conseil coloriste : {hair.get('tips', '')}
 
 ACCESSOIRES :
 - Lunettes : {acc.get('glasses', '')}
 - Bijoux : {acc.get('jewelry', '')}
 - Ongles : {acc.get('nails', '')}
-
-REGLES :
-1. Reponds TOUJOURS en francais
-2. Base tes conseils UNIQUEMENT sur la saison et le profil du client ci-dessus
-3. Sois precis et actionnable (noms de couleurs, types de vetements, marques si pertinent)
-4. Si le client demande quelque chose hors de ton expertise, dis-le honnetement
-5. Sois chaleureux, encourageant mais professionnel
-6. Reponds de maniere concise (3-5 phrases max sauf si on te demande du detail)
-7. Si le client mentionne un vetement ou une couleur specifique, dis si ca lui va ou pas et POURQUOI
+- Foulards : {acc.get('scarves', '')}
+- Sacs/chaussures : {acc.get('bags_shoes', '')}
 """
 
 
-def get_gemini_model(api_key, system_prompt):
-    """Initialize Gemini model with system prompt."""
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(
-        "gemini-2.0-flash",
-        system_instruction=system_prompt,
-    )
+GEMINI_MODELS = ["gemini-flash-latest", "gemini-2.5-flash", "gemini-2.0-flash", "gemini-flash-lite-latest"]
 
 
-def stream_coach_response(model, history, user_message):
+def stream_coach_response(api_key, system_prompt, history, user_message):
     """Stream a response from Gemini, yielding chunks for st.write_stream."""
-    # Convert history to Gemini format (role: user/model)
-    gemini_history = []
+    client = genai.Client(api_key=api_key)
+
+    # Build contents: system instruction + history + new message
+    contents = []
     for m in history:
         role = "model" if m["role"] == "assistant" else "user"
-        gemini_history.append({"role": role, "parts": [m["content"]]})
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+    contents.append({"role": "user", "parts": [{"text": user_message}]})
 
-    chat = model.start_chat(history=gemini_history)
-    response = chat.send_message(user_message, stream=True)
-    for chunk in response:
-        if chunk.text:
-            yield chunk.text
+    # Try models in fallback order
+    last_error = None
+    for model_name in GEMINI_MODELS:
+        try:
+            response = client.models.generate_content_stream(
+                model=model_name,
+                contents=contents,
+                config={"system_instruction": system_prompt},
+            )
+            for chunk in response:
+                if chunk.text:
+                    yield chunk.text
+            return  # Success
+        except Exception as exc:
+            last_error = exc
+            if "quota" not in str(exc).lower() and "429" not in str(exc):
+                raise  # Non-quota error, don't try next model
+            continue
+
+    if last_error:
+        yield f"\n\nQuota Gemini epuisee. Reessayez dans quelques minutes. ({last_error})"
 
 
 def render_gauge(value, vmin, vmax, label_left, label_right, title):
@@ -1921,9 +1966,11 @@ def main():
 
                 with st.chat_message("assistant"):
                     try:
-                        model = get_gemini_model(ai_key, system_prompt)
                         response = st.write_stream(
-                            stream_coach_response(model, st.session_state.coach_messages[:-1], prompt)
+                            stream_coach_response(
+                                ai_key, system_prompt,
+                                st.session_state.coach_messages[:-1], prompt,
+                            )
                         )
                         st.session_state.coach_messages.append({"role": "assistant", "content": response})
                     except Exception as exc:
