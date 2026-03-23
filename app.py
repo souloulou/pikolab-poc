@@ -1600,6 +1600,12 @@ def main():
 
     progress.progress(100, text="Analyse terminee !")
     st.session_state["analysis_done"] = True
+    # Store context for Coach IA page
+    st.session_state["ctx"] = {
+        "season": season, "advice": advice, "profile": profile,
+        "diagnostic": diagnostic, "hair_info": hair_info,
+        "lip_undertone": lip_undertone, "scores": scores, "contrast": contrast,
+    }
     progress.empty()
 
     # ---- Season result card ----
@@ -1692,15 +1698,6 @@ def main():
             st.info("Vos cheveux sont teints — les conseils colorimetriques se basent sur votre couleur NATURELLE pour plus de precision. Votre styliste peut adapter.")
 
     # ---- Tabs by view mode ----
-    # Check if Gemini API key is available
-    has_ai = False
-    try:
-        ai_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
-        has_ai = bool(ai_key)
-    except Exception:
-        ai_key = os.environ.get("GEMINI_API_KEY", "")
-        has_ai = bool(ai_key)
-
     if view_mode == "Client":
         tab_labels = ["Profil", "Essayage", "Conseils"]
         tab_labels.append("Photo")
@@ -1943,7 +1940,7 @@ def main():
                         st.markdown(f"- {m}")
         tab_idx += 1
 
-    # Coach IA is rendered AFTER tabs (below) to avoid tab-switch on chat rerun
+    # Coach IA is on a separate page (pages/coach_ia.py)
 
     # ---- TAB: Photo (Client + Pro) ----
     if view_mode in ["Client", "Professionnel"]:
@@ -2023,53 +2020,7 @@ def main():
             all_distances.sort(key=lambda x: x["Distance"])
             st.dataframe(all_distances, use_container_width=True, hide_index=True)
 
-    # ---- COACH IA (outside tabs to avoid tab-switch on rerun) ----
-    if has_ai:
-        st.markdown("---")
-        st.markdown("### Coach Iris — votre styliste IA")
-        st.caption(
-            "Posez vos questions : tenue pour une occasion, shopping, "
-            "maquillage, cheveux... Iris connait votre profil complet."
-        )
-
-        quiz_data = {}
-        if "q_hair" in st.session_state:
-            quiz_data["hair_dyed"] = st.session_state.get("q_hair", "")
-            quiz_data["natural_hair"] = st.session_state.get("q_nat_hair", "")
-            quiz_data["style"] = st.session_state.get("q_style", "")
-            quiz_data["work"] = st.session_state.get("q_work", "")
-            quiz_data["current_colors"] = ", ".join(st.session_state.get("q_colors", []))
-            quiz_data["interest"] = st.session_state.get("q_interest", "")
-
-        system_prompt = build_coach_system_prompt(
-            season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data,
-        )
-
-        if "coach_messages" not in st.session_state:
-            st.session_state.coach_messages = []
-
-        for msg in st.session_state.coach_messages:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
-
-        if prompt := st.chat_input("Ex: Je vais a un mariage, qu'est-ce que je porte ?"):
-            st.session_state.coach_messages.append({"role": "user", "content": prompt})
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            with st.chat_message("assistant"):
-                try:
-                    response = st.write_stream(
-                        stream_coach_response(
-                            ai_key, system_prompt,
-                            st.session_state.coach_messages[:-1], prompt,
-                        )
-                    )
-                    st.session_state.coach_messages.append({"role": "assistant", "content": response})
-                except Exception as exc:
-                    err_msg = f"Erreur du coach : {exc}"
-                    st.error(err_msg)
-                    st.session_state.coach_messages.append({"role": "assistant", "content": err_msg})
+    # Coach IA is on a separate page (pages/coach_ia.py)
 
 
 if __name__ == "__main__":
