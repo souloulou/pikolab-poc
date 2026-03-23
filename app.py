@@ -688,15 +688,31 @@ def main():
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 
-    # ---- Sidebar: expert settings only ----
-    show_expert = st.sidebar.checkbox("Mode expert", value=False)
-    with st.sidebar.expander("Parametres avances", expanded=False):
-        temp_center = st.slider("Temperature neutre (b*)", 5.0, 30.0, DEFAULTS["temp_center"], 0.5)
-        temp_scale = st.slider("Echelle temperature", 5.0, 25.0, DEFAULTS["temp_scale"], 0.5)
-        value_center = st.slider("Valeur mediane (L*)", 30.0, 70.0, DEFAULTS["value_center"], 1.0)
-        sat_center = st.slider("Saturation mediane (C*)", 5.0, 35.0, DEFAULTS["sat_center"], 0.5)
-        sat_scale = st.slider("Echelle saturation", 5.0, 25.0, DEFAULTS["sat_scale"], 0.5)
-        dominance_thresh = st.slider("Seuil de dominance", 0.05, 0.60, DEFAULTS["dominance_thresh"], 0.05)
+    # ---- Sidebar ----
+    st.sidebar.header("Mode d'affichage")
+    view_mode = st.sidebar.radio(
+        "Niveau de detail",
+        ["Client", "Professionnel", "Avance"],
+        index=0,
+        help="Client = resultats simples, Pro = coaching styliste, Avance = debug technique",
+    )
+
+    # Classification params (Avance only)
+    if view_mode == "Avance":
+        with st.sidebar.expander("Seuils de classification", expanded=False):
+            temp_center = st.slider("Temperature neutre (b*)", 5.0, 30.0, DEFAULTS["temp_center"], 0.5)
+            temp_scale = st.slider("Echelle temperature", 5.0, 25.0, DEFAULTS["temp_scale"], 0.5)
+            value_center = st.slider("Valeur mediane (L*)", 30.0, 70.0, DEFAULTS["value_center"], 1.0)
+            sat_center = st.slider("Saturation mediane (C*)", 5.0, 35.0, DEFAULTS["sat_center"], 0.5)
+            sat_scale = st.slider("Echelle saturation", 5.0, 25.0, DEFAULTS["sat_scale"], 0.5)
+            dominance_thresh = st.slider("Seuil de dominance", 0.05, 0.60, DEFAULTS["dominance_thresh"], 0.05)
+    else:
+        temp_center = DEFAULTS["temp_center"]
+        temp_scale = DEFAULTS["temp_scale"]
+        value_center = DEFAULTS["value_center"]
+        sat_center = DEFAULTS["sat_center"]
+        sat_scale = DEFAULTS["sat_scale"]
+        dominance_thresh = DEFAULTS["dominance_thresh"]
 
     params = {
         "temp_center": temp_center,
@@ -841,9 +857,10 @@ def main():
     st.session_state["analysis_done"] = True
     progress.empty()
 
-    # ---- Season result card (styled HTML) ----
+    # ---- Season result card ----
     season_colors = SEASON_PALETTES.get(season, ["#E07A5F", "#F2CC8F"])
-    c1, c2 = season_colors[0], season_colors[1] if len(season_colors) > 1 else season_colors[0]
+    c1 = season_colors[0]
+    c2 = season_colors[1] if len(season_colors) > 1 else c1
 
     if confidence >= 0.7:
         conf_text = "Resultat fiable"
@@ -851,6 +868,9 @@ def main():
         conf_text = "Resultat indicatif"
     else:
         conf_text = "Resultat a confirmer — reprenez la photo en lumiere naturelle"
+
+    tagline = advice.get("tagline", "")
+    desc = advice.get("description", "")
 
     st.markdown(f"""
     <div style="
@@ -862,24 +882,84 @@ def main():
     ">
         <p style="margin:0; color: #888; font-size: 0.9rem;">Votre saison</p>
         <h1 style="margin: 0.15rem 0; color: {c1}; font-size: 2rem;">{season}</h1>
-        <p style="margin:0; color: #555; font-style: italic; font-size: 0.95rem;">
-            {advice.get('description', '')}
-        </p>
+        <p style="margin:0 0 0.3rem 0; color: {c1}; font-size: 1rem; font-weight: 600;">{tagline}</p>
+        <p style="margin:0; color: #555; font-style: italic; font-size: 0.95rem;">{desc}</p>
         <p style="margin-top: 0.5rem; color: #888; font-size: 0.85rem;">{conf_text}</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # ---- Tabs ----
-    tab_labels = ["Profil", "Conseils", "Photo"]
-    if show_expert:
-        tab_labels += ["Detection", "Debug"]
+    # ---- Questionnaire (optional, after results) ----
+    with st.expander("Affinez vos resultats (30 secondes)", expanded=False):
+        st.caption("Repondez a ces questions pour des conseils encore plus personnalises.")
+
+        q_hair_dyed = st.radio(
+            "Vos cheveux sont-ils teints ?",
+            ["Non, couleur naturelle", "Oui, ils sont teints"],
+            horizontal=True, key="q_hair",
+        )
+        q_natural_hair = None
+        if q_hair_dyed == "Oui, ils sont teints":
+            q_natural_hair = st.selectbox(
+                "Quelle est votre couleur naturelle ?",
+                ["Blond", "Chatain clair", "Chatain fonce", "Brun", "Noir", "Roux"],
+                key="q_nat_hair",
+            )
+
+        q_style = st.radio(
+            "Votre style vestimentaire ?",
+            ["Casual", "Classique", "Creatif", "Sportif"],
+            horizontal=True, key="q_style",
+        )
+
+        q_work = st.radio(
+            "Votre environnement de travail ?",
+            ["Formel", "Smart casual", "Libre", "Pas concerne(e)"],
+            horizontal=True, key="q_work",
+        )
+
+        q_current_colors = st.multiselect(
+            "Quelles couleurs portez-vous le plus ?",
+            ["Noir", "Bleu", "Blanc", "Beige/Camel", "Gris", "Couleurs vives", "Tons terre"],
+            key="q_colors",
+        )
+
+        q_interest = st.radio(
+            "Quel conseil vous interesse le plus ?",
+            ["Garde-robe", "Maquillage", "Cheveux", "Tout"],
+            horizontal=True, key="q_interest",
+        )
+
+    # Personalized alerts based on questionnaire
+    has_quiz = len(q_current_colors) > 0
+    if has_quiz:
+        # Alert if wearing colors that don't match their season
+        avoid_colors = advice.get("palette_avoid", [])
+        avoid_summary = advice.get("avoid_summary", "")
+        if "Noir" in q_current_colors and season_colors[0] not in ["#000000", "#1A1A2E", "#0D0D0D", "#1C1C1C"]:
+            black_alt = advice.get("black_alt", "")
+            if black_alt and "noir" not in black_alt.lower()[:20]:
+                st.warning(f"Vous portez souvent du noir, mais votre saison prefere : **{black_alt}**")
+        if "Beige/Camel" in q_current_colors and any("Spring" not in season and "Autumn" not in season for _ in [1]):
+            if "Summer" in season or "Winter" in season:
+                st.warning(f"Le beige/camel n'est pas ideal pour {season}. Preferez : **{advice.get('white_alt', 'blanc froid')}** ou **gris**")
+
+        if q_hair_dyed == "Oui, ils sont teints":
+            st.info("Vos cheveux sont teints — les conseils colorimetriques se basent sur votre couleur NATURELLE pour plus de precision. Votre styliste peut adapter.")
+
+    # ---- Tabs by view mode ----
+    if view_mode == "Client":
+        tab_labels = ["Profil", "Conseils", "Photo"]
+    elif view_mode == "Professionnel":
+        tab_labels = ["Profil", "Conseils", "Coaching", "Photo"]
+    else:  # Avance
+        tab_labels = ["Profil", "Conseils", "Coaching", "Detection", "Debug"]
 
     tabs = st.tabs(tab_labels)
+    tab_idx = 0
 
     # ---- TAB: Profil ----
-    with tabs[0]:
+    with tabs[tab_idx]:
         st.markdown("### Votre profil en 4 dimensions")
-
         for label, raw, vmin, vmax, left, right in [
             (f"Sous-ton : {profile['undertone']}", profile["raw_undertone"], -1, 1, "Froid", "Chaud"),
             (f"Valeur : {profile['depth']}", profile["raw_depth"], -1, 1, "Fonce", "Clair"),
@@ -897,8 +977,19 @@ def main():
             st.markdown(f"{icon} **{entry['season']}** — {entry['match_pct']:.0f}%")
             st.progress(entry["match_pct"] / 100.0)
 
+        # Quick summary
+        if advice:
+            st.markdown("---")
+            st.success(f"**A porter** : {advice.get('best_summary', '')}")
+            st.error(f"**A eviter** : {advice.get('avoid_summary', '')}")
+
+            icons = advice.get("icons", [])
+            if icons:
+                st.caption(f"Meme palette que : {', '.join(icons)}")
+    tab_idx += 1
+
     # ---- TAB: Conseils ----
-    with tabs[1]:
+    with tabs[tab_idx]:
         if not advice:
             st.warning(f"Pas de conseils disponibles pour {season}.")
         else:
@@ -908,74 +999,148 @@ def main():
             st.pyplot(fig_pal)
             plt.close(fig_pal)
             st.markdown(f"**Metaux** : {advice.get('metals', '')}")
+            black_alt = advice.get("black_alt", "")
+            white_alt = advice.get("white_alt", "")
+            if black_alt:
+                st.markdown(f"**Alternative au noir** : {black_alt}")
+            if white_alt:
+                st.markdown(f"**Alternative au blanc** : {white_alt}")
 
             st.markdown("---")
 
             # Maquillage
             makeup = advice.get("makeup", {})
-            st.markdown("### Maquillage")
-            st.markdown(f"**Fond de teint** : {makeup.get('foundation', '')}")
-            lips = makeup.get("lips", [])
-            if lips:
-                st.markdown(f"**Levres** : {', '.join(lips)}")
-            eyes = makeup.get("eyes", [])
-            if eyes:
-                st.markdown(f"**Yeux** : {', '.join(eyes)}")
-            blush = makeup.get("blush", [])
-            if blush:
-                st.markdown(f"**Blush** : {', '.join(blush)}")
-            st.markdown(f"**Sourcils** : {makeup.get('eyebrows', '')}")
+            show_makeup = (not has_quiz) or q_interest in ["Maquillage", "Tout"]
+            with st.expander("Maquillage", expanded=show_makeup):
+                st.markdown(f"**Fond de teint** : {makeup.get('foundation', '')}")
+                lips = makeup.get("lips", [])
+                if lips:
+                    st.markdown(f"**Levres** : {', '.join(lips)}")
+                eyes = makeup.get("eyes", [])
+                if eyes:
+                    st.markdown(f"**Yeux** : {', '.join(eyes)}")
+                blush = makeup.get("blush", [])
+                if blush:
+                    st.markdown(f"**Blush** : {', '.join(blush)}")
+                st.markdown(f"**Sourcils** : {makeup.get('eyebrows', '')}")
 
-            st.markdown("---")
+                # Makeup looks
+                st.markdown("---")
+                st.markdown("**Looks cles :**")
+                for look_key, look_label in [("look_naturel", "Naturel"), ("look_soiree", "Soiree"), ("look_pro", "Bureau")]:
+                    look = makeup.get(look_key, "")
+                    if look:
+                        st.markdown(f"- **{look_label}** : {look}")
 
             # Vetements
             clothing = advice.get("clothing", {})
-            st.markdown("### Vetements")
-            combos = clothing.get("best_combinations", [])
-            if combos:
-                for combo in combos:
-                    st.markdown(f"- {combo}")
-            st.markdown(f"**Motifs** : {clothing.get('patterns', '')}")
-            st.markdown(f"**Tissus** : {clothing.get('fabrics', '')}")
-            st.info(f"Contraste : {clothing.get('contrast_tip', '')}")
+            show_clothing = (not has_quiz) or q_interest in ["Garde-robe", "Tout"]
+            with st.expander("Vetements", expanded=show_clothing):
+                combos = clothing.get("best_combinations", [])
+                if combos:
+                    st.markdown("**Combinaisons gagnantes :**")
+                    for combo in combos:
+                        st.markdown(f"- {combo}")
+                st.markdown(f"**Motifs** : {clothing.get('patterns', '')}")
+                st.markdown(f"**Echelle motifs** : {clothing.get('pattern_scale', '')}")
+                st.markdown(f"**Tissus** : {clothing.get('fabrics', '')}")
+                st.info(f"Contraste : {clothing.get('contrast_tip', '')}")
 
-            st.markdown("---")
+                # Capsule wardrobe
+                capsule = clothing.get("capsule", [])
+                if capsule:
+                    st.markdown("---")
+                    st.markdown("**Capsule garde-robe :**")
+                    for item in capsule:
+                        st.markdown(f"- {item}")
+
+                tip = clothing.get("shopping_tip", "")
+                if tip:
+                    st.markdown("---")
+                    st.caption(f"Astuce shopping : {tip}")
 
             # Cheveux
             hair = advice.get("hair", {})
-            st.markdown("### Cheveux")
-            ideal = hair.get("ideal", [])
-            avoid = hair.get("avoid", [])
-            for h in ideal:
-                st.markdown(f"- ✅ {h}")
-            for h in avoid:
-                st.markdown(f"- ❌ {h}")
-
-            st.markdown("---")
+            show_hair = (not has_quiz) or q_interest in ["Cheveux", "Tout"]
+            with st.expander("Cheveux", expanded=show_hair):
+                for h in hair.get("ideal", []):
+                    st.markdown(f"- ✅ {h}")
+                for h in hair.get("avoid", []):
+                    st.markdown(f"- ❌ {h}")
+                tips = hair.get("tips", "")
+                if tips:
+                    st.caption(tips)
 
             # Accessoires
             acc = advice.get("accessories", {})
-            st.markdown("### Accessoires")
-            st.markdown(f"**Lunettes** : {acc.get('glasses', '')}")
-            st.markdown(f"**Bijoux** : {acc.get('jewelry', '')}")
-            st.markdown(f"**Sacs & chaussures** : {acc.get('bags_shoes', '')}")
+            with st.expander("Accessoires", expanded=False):
+                st.markdown(f"**Lunettes** : {acc.get('glasses', '')}")
+                st.markdown(f"**Bijoux** : {acc.get('jewelry', '')}")
+                st.markdown(f"**Sacs & chaussures** : {acc.get('bags_shoes', '')}")
+                scarves = acc.get("scarves", "")
+                if scarves:
+                    st.markdown(f"**Foulards** : {scarves}")
+                nails = acc.get("nails", "")
+                if nails:
+                    st.markdown(f"**Ongles** : {nails}")
+    tab_idx += 1
 
-    # ---- TAB: Photo ----
-    with tabs[2]:
-        st.image(image_rgb, caption="Originale", use_container_width=True)
-        st.image(corrected, caption=f"Apres correction ({correction_method})", use_container_width=True)
+    # ---- TAB: Coaching (Pro + Avance) ----
+    if view_mode in ["Professionnel", "Avance"]:
+        with tabs[tab_idx]:
+            expert = advice.get("expert", {})
+            if not expert:
+                st.info("Pas de donnees coaching pour cette saison.")
+            else:
+                st.markdown("### Draping — couleurs de test")
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("**Confirment cette saison :**")
+                    for c in expert.get("draping_confirm", []):
+                        st.markdown(f"- ✅ {c}")
+                with col2:
+                    st.markdown("**Rejettent cette saison :**")
+                    for c in expert.get("draping_reject", []):
+                        st.markdown(f"- ❌ {c}")
 
-    # ---- Expert tabs ----
-    if show_expert and len(tabs) > 3:
-        with tabs[3]:  # Detection
+                st.markdown("---")
+                st.markdown("### Differentiation")
+                st.markdown(f"**Saison cle** : {expert.get('key_differentiator', '')}")
+                st.markdown(f"**Confondue avec** : {expert.get('confused_with', '')}")
+                st.markdown(f"**Variations de carnation** : {expert.get('skin_variations', '')}")
+
+                st.markdown("---")
+                st.markdown("### Notes de coaching")
+                st.info(expert.get("coaching_notes", ""))
+
+                mistakes = expert.get("common_mistakes", [])
+                if mistakes:
+                    st.markdown("**Erreurs frequentes du client :**")
+                    for m in mistakes:
+                        st.markdown(f"- {m}")
+        tab_idx += 1
+
+    # ---- TAB: Photo (Client + Pro) ----
+    if view_mode in ["Client", "Professionnel"]:
+        with tabs[tab_idx]:
+            st.image(image_rgb, caption="Originale", use_container_width=True)
+            st.image(corrected, caption=f"Apres correction ({correction_method})", use_container_width=True)
+        tab_idx += 1
+
+    # ---- TABs: Detection + Debug (Avance only) ----
+    if view_mode == "Avance":
+        with tabs[tab_idx]:  # Detection
             overlay = render_face_overlay(corrected, skin_mask, iris_mask)
             st.image(overlay, caption="Zones analysees (vert = peau, bleu = iris)", use_container_width=True)
             col1, col2, col3 = st.columns(3)
             col1.metric("Pixels peau", f"{skin_px:,}")
             col2.metric("Pixels iris", f"{iris_px:,}")
             col3.metric("Landmarks", f"{len(landmarks)}")
+            st.image(image_rgb, caption="Originale", use_container_width=True)
+            st.image(corrected, caption=f"Correction ({correction_method})", use_container_width=True)
+        tab_idx += 1
 
-        with tabs[4]:  # Debug
+        with tabs[tab_idx]:  # Debug
             st.subheader("CIELab — Peau")
             col1, col2, col3, col4 = st.columns(4)
             col1.metric("L*", f"{skin_stats['L']:.1f}")

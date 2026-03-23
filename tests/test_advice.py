@@ -9,6 +9,7 @@ from season_advice import (
     REQUIRED_CLOTHING_KEYS,
     REQUIRED_HAIR_KEYS,
     REQUIRED_ACCESSORIES_KEYS,
+    REQUIRED_EXPERT_KEYS,
 )
 from app import (
     SEASON_PALETTES,
@@ -81,6 +82,52 @@ class TestSeasonAdviceIntegrity:
         for name, advice in SEASON_ADVICE.items():
             desc = advice["description"]
             assert isinstance(desc, str) and len(desc) > 20, f"'{name}' description too short"
+
+    def test_all_expert_keys(self):
+        for name, advice in SEASON_ADVICE.items():
+            expert = advice.get("expert", {})
+            assert expert, f"'{name}' missing expert section"
+            for key in REQUIRED_EXPERT_KEYS:
+                assert key in expert, f"'{name}' expert missing '{key}'"
+
+    def test_tagline_present(self):
+        for name, advice in SEASON_ADVICE.items():
+            assert "tagline" in advice, f"'{name}' missing tagline"
+            assert len(advice["tagline"]) > 5, f"'{name}' tagline too short"
+
+    def test_icons_present(self):
+        for name, advice in SEASON_ADVICE.items():
+            assert "icons" in advice, f"'{name}' missing icons"
+            assert len(advice["icons"]) >= 2, f"'{name}' needs >= 2 icons"
+
+    def test_black_white_alternatives(self):
+        for name, advice in SEASON_ADVICE.items():
+            assert "black_alt" in advice, f"'{name}' missing black_alt"
+            assert "white_alt" in advice, f"'{name}' missing white_alt"
+
+    def test_makeup_looks_present(self):
+        for name, advice in SEASON_ADVICE.items():
+            makeup = advice["makeup"]
+            for look in ["look_naturel", "look_soiree", "look_pro"]:
+                assert look in makeup, f"'{name}' makeup missing '{look}'"
+
+    def test_capsule_wardrobe_present(self):
+        for name, advice in SEASON_ADVICE.items():
+            capsule = advice["clothing"].get("capsule", [])
+            assert len(capsule) >= 5, f"'{name}' capsule needs >= 5 items"
+
+    def test_shopping_tip_present(self):
+        for name, advice in SEASON_ADVICE.items():
+            assert advice["clothing"].get("shopping_tip"), f"'{name}' missing shopping_tip"
+
+    def test_hair_tips_present(self):
+        for name, advice in SEASON_ADVICE.items():
+            assert advice["hair"].get("tips"), f"'{name}' missing hair tips"
+
+    def test_nails_and_scarves_present(self):
+        for name, advice in SEASON_ADVICE.items():
+            assert advice["accessories"].get("nails"), f"'{name}' missing nails"
+            assert advice["accessories"].get("scarves"), f"'{name}' missing scarves"
 
 
 class TestSeasonCentroids:

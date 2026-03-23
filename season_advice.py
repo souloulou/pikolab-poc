@@ -1,8 +1,7 @@
 """
 PikoLab — Base de conseils holistiques pour les 16 saisons.
-Chaque saison contient : description, palettes catégorisées, maquillage,
-vêtements, cheveux, accessoires.
-Données basées sur la théorie des couleurs saisonnières (Munsell / Sci\ART).
+Trois niveaux : Client (actionnable), Pro (coaching), Avance (technique).
+Donnees basees sur la theorie Sci/ART et les pratiques modernes de colorimetrie.
 """
 
 SEASON_ADVICE = {
@@ -10,48 +9,92 @@ SEASON_ADVICE = {
     # SPRING — Chaud + Clair
     # ================================================================
     "Light Spring": {
+        "tagline": "La douceur lumineuse du matin",
         "description": (
-            "Douceur lumineuse. Couleurs claires, chaudes et delicates comme un matin de printemps. "
-            "Votre palette est la plus legere des saisons chaudes : pastel chauds, tons peche, ivoire."
+            "Couleurs claires, chaudes et delicates comme la rosee sur les fleurs. "
+            "Votre palette est la plus legere des saisons chaudes : pastels chauds, "
+            "tons peche, corail doux et vert d'eau."
         ),
+        "icons": ["Amanda Seyfried", "Cate Blanchett", "Scarlett Johansson"],
+        "best_summary": "Pastels chauds, peche, corail doux, vert d'eau, dore clair",
+        "avoid_summary": "Noir, couleurs sombres, rouge vif, argent froid",
+        "black_alt": "Taupe fonce ou brun moyen",
+        "white_alt": "Ivoire chaud ou coquille d'oeuf",
         "palette_neutrals": ["#F5F0E1", "#D2B48C", "#C4A882", "#8B7D6B", "#5C5248"],
         "palette_accents": ["#FFB347", "#FF6F61", "#87CEAB", "#FFD700", "#F4A460", "#77B5FE"],
         "palette_avoid": ["#000000", "#1C1C1C", "#800020", "#4B0082", "#2F4F4F", "#C0C0C0"],
         "metals": "Or jaune clair, or rose. Eviter argent et platine.",
         "makeup": {
-            "foundation": "Sous-ton peche/dore clair. Eviter les fonds de teint roses ou trop couvrants.",
+            "foundation": "Sous-ton peche/dore clair. Finish lumineux ou satin. Eviter les fonds de teint roses.",
             "lips": ["Peche clair", "Corail doux", "Rose saumon", "Nude abricot"],
             "eyes": ["Champagne", "Peche", "Vert sauge clair", "Brun dore clair"],
             "blush": ["Peche", "Abricot clair", "Rose corail lumineux"],
-            "eyebrows": "Blond dore ou chatain clair, trait leger"
+            "eyebrows": "Blond dore ou chatain clair, trait leger",
+            "look_naturel": "Teint lumineux + mascara brun + levres peche nude + blush abricot",
+            "look_soiree": "Fard champagne dore + levres corail + blush peche intense",
+            "look_pro": "Teint parfait satin + levres nude abricot + yeux champagne discret",
         },
         "clothing": {
             "best_combinations": [
                 "Ivoire + peche",
                 "Camel clair + corail",
                 "Bleu ciel chaud + creme",
-                "Vert d'eau + dore"
+                "Vert d'eau + dore",
             ],
-            "patterns": "Motifs floraux delicats, rayures fines, aquarelle, liberty",
-            "contrast_tip": "Contraste bas a moyen. Harmonies ton sur ton. Eviter les forts contrastes noir/blanc.",
-            "fabrics": "Coton leger, lin, soie fluide, mousseline, maille fine"
+            "patterns": "Floraux delicats, rayures fines, aquarelle, liberty",
+            "pattern_scale": "Petits a moyens. Les gros motifs vous ecrasent.",
+            "contrast_tip": "Contraste bas a moyen. Harmonies ton sur ton. Eviter les forts contrastes.",
+            "fabrics": "Coton leger, lin, soie fluide, mousseline, maille fine",
+            "capsule": [
+                "Jean clair ou blanc casse",
+                "Pantalon beige chaud",
+                "Blouse peche ou abricot",
+                "Cardigan vert d'eau",
+                "Veste camel clair",
+                "Robe corail doux",
+                "T-shirt ivoire chaud",
+            ],
+            "shopping_tip": "En magasin, placez le vetement sous votre menton. Si votre peau s'illumine et semble fraiche, c'est la bonne couleur. Si elle parait terne ou grise, reposez-le.",
         },
         "hair": {
             "ideal": ["Blond dore", "Blond miel", "Chatain clair dore", "Blond venitien"],
-            "avoid": ["Noir", "Brun froid", "Blond platine", "Cendre"]
+            "avoid": ["Noir", "Brun froid", "Blond platine", "Cendre"],
+            "tips": "Les reflets miel ou dores subliment votre teint. Evitez absolument les cendrés qui eteignent votre luminosite naturelle.",
         },
         "accessories": {
             "glasses": "Montures dorees, transparentes, nude, ecaille claire",
-            "jewelry": "Or jaune, perles creme, pierres pastel (quartz rose, citrine, aigue-marine)",
-            "bags_shoes": "Nude, camel clair, peche, cognac clair. Pas de noir."
-        }
+            "jewelry": "Or jaune, perles creme, quartz rose, citrine, aigue-marine",
+            "bags_shoes": "Nude, camel clair, peche, cognac clair. Pas de noir.",
+            "scarves": "Peche, corail doux, vert d'eau, ivoire",
+            "nails": "Peche, rose chaud clair, nude dore, corail pastel",
+        },
+        "expert": {
+            "draping_confirm": ["Peche clair", "Corail doux", "Vert d'eau chaud"],
+            "draping_reject": ["Fuchsia (durcit)", "Noir (creuse)", "Bordeaux (assombrit)"],
+            "confused_with": "Light Summer (verifier la temperature : LS est froid, Light Spring est chaud). Aussi True Spring (Light Spring est plus delave, moins sature).",
+            "key_differentiator": "La CLARTE est dominante. C'est le printemps le plus pastel. Les couleurs vives la submergent.",
+            "coaching_notes": "Cette cliente va naturellement vers les couleurs claires mais risque de choisir des pastels froids (lavande, bleu glace). Redirigez vers les pastels CHAUDS (peche, abricot, vert d'eau). Le test : la couleur doit rechauffer le teint, pas le refroidir.",
+            "common_mistakes": [
+                "Choisir du blanc pur au lieu d'ivoire chaud",
+                "Porter des pastels froids (lavande) au lieu de chauds (peche)",
+                "Accessoires argentes au lieu de dores",
+                "Maquillage trop marque pour sa delicatesse naturelle",
+            ],
+            "skin_variations": "Peau claire a doree. Se retrouve principalement chez les teints nordiques, celtiques ou est-asiatiques clairs a sous-ton chaud.",
+        },
     },
 
     "Warm Spring": {
+        "tagline": "L'eclat dore du soleil",
         "description": (
-            "Chaleur rayonnante. Couleurs riches et chaudes avec une luminosite naturelle. "
-            "Votre palette est intensement doree : peche, corail, turquoise chaud, vert pomme."
+            "Chaleur rayonnante et energie dorée. Vos couleurs sont riches et chaudes "
+            "avec une luminosite naturelle : corail, turquoise, moutarde et vert olive."
         ),
+        "icons": ["Jessica Alba", "Jennifer Aniston", "Gisele Bundchen"],
+        "best_summary": "Corail, turquoise chaud, moutarde, vert olive, peche intense",
+        "avoid_summary": "Noir, fuchsia, argent, blanc pur, gris froid",
+        "black_alt": "Brun chocolat ou marine dore",
+        "white_alt": "Creme chaud ou ivoire dore",
         "palette_neutrals": ["#FFFDD0", "#D2B48C", "#8B7355", "#5C4033", "#3B2F2F"],
         "palette_accents": ["#E07A5F", "#E9C46A", "#81B29A", "#F4A261", "#FF6B35", "#2A9D8F"],
         "palette_avoid": ["#000000", "#FF00FF", "#C0C0C0", "#4169E1", "#800080", "#F8F8FF"],
@@ -61,35 +104,72 @@ SEASON_ADVICE = {
             "lips": ["Corail chaud", "Orange brulee doux", "Peche intense", "Brique claire"],
             "eyes": ["Bronze", "Cuivre", "Vert olive", "Brun dore", "Turquoise"],
             "blush": ["Peche intense", "Abricot", "Corail chaud"],
-            "eyebrows": "Chatain dore, auburn clair"
+            "eyebrows": "Chatain dore, auburn clair",
+            "look_naturel": "Teint dore + mascara brun + levres peche + blush abricot",
+            "look_soiree": "Smoky bronze et cuivre + levres brique + blush corail",
+            "look_pro": "Teint uniforme dore + levres nude peche + yeux brun dore discret",
         },
         "clothing": {
             "best_combinations": [
                 "Turquoise + corail",
                 "Vert olive + moutarde",
                 "Rouille claire + creme",
-                "Camel + vert pomme"
+                "Camel + vert pomme",
             ],
             "patterns": "Imprime tropical, ethnique, pois, rayures colorees",
-            "contrast_tip": "Contraste moyen. Les couleurs vives sont vos alliees mais restez dans les tons chauds.",
-            "fabrics": "Lin, coton, soie mate, daim leger, raphia"
+            "pattern_scale": "Moyens a grands. Les motifs vifs et expressifs vous vont bien.",
+            "contrast_tip": "Contraste moyen. Couleurs vives mais toujours dans les tons chauds.",
+            "fabrics": "Lin, coton, soie mate, daim leger, raphia",
+            "capsule": [
+                "Jean brut indigo",
+                "Pantalon olive",
+                "Chemise creme chaud",
+                "Pull moutarde",
+                "Veste camel",
+                "Robe corail",
+                "T-shirt turquoise chaud",
+            ],
+            "shopping_tip": "Fiez-vous a la regle du 'rechauffement'. Si le vetement rend votre peau plus doree et lumineuse, c'est oui. Si elle parait verdatre ou terne, c'est non.",
         },
         "hair": {
             "ideal": ["Roux dore", "Auburn", "Chatain dore", "Blond miel fonce"],
-            "avoid": ["Noir bleu", "Cendre", "Gris argente", "Blond platine"]
+            "avoid": ["Noir bleu", "Cendre", "Gris argente", "Blond platine"],
+            "tips": "Les meches cuivrees ou caramel sont vos meilleures alliees. Les balayages dores illuminent le visage.",
         },
         "accessories": {
             "glasses": "Ecaille chaude, dore, caramel, vert olive",
             "jewelry": "Or jaune, ambre, corail, turquoise, bois",
-            "bags_shoes": "Cognac, tan, camel, rouille. Eviter noir et gris."
-        }
+            "bags_shoes": "Cognac, tan, camel, rouille. Eviter noir et gris.",
+            "scarves": "Corail, moutarde, turquoise, rouille",
+            "nails": "Corail, peche fonce, rouille claire, nude dore",
+        },
+        "expert": {
+            "draping_confirm": ["Corail vif", "Turquoise chaud", "Moutarde doree"],
+            "draping_reject": ["Rose froid (eteint)", "Bleu roi (refroidit)", "Gris (aplatit)"],
+            "confused_with": "True Spring (Warm Spring est plus franchement dore), Warm Autumn (verifier la valeur : WS est plus clair que WA).",
+            "key_differentiator": "La CHALEUR est dominante. C'est le printemps le plus dore. Tout est or, cuivre, terre chaude.",
+            "coaching_notes": "Ce client est souvent attire par le noir 'passe-partout'. Montrez-lui la difference spectaculaire entre un col noir (terne) et un col camel (lumineux) pres du visage. C'est le declic.",
+            "common_mistakes": [
+                "Le reflexe noir pour 'faire chic'",
+                "Bijoux argentes par habitude",
+                "Rose froid au lieu de peche/corail",
+                "Bleu electrique au lieu de turquoise chaud",
+            ],
+            "skin_variations": "Peau doree a olive claire. Frequent chez les teints mediterraneens, latino-americains, et caucasiens a sous-ton franchement dore.",
+        },
     },
 
     "Bright Spring": {
+        "tagline": "L'eclat vif du coquelicot",
         "description": (
-            "Eclat et vivacite. Couleurs vives, pures et lumineuses. "
-            "Votre palette est la plus saturee des printemps : corail vif, turquoise eclatant, jaune soleil."
+            "Vivacite et purete. Vos couleurs sont les plus saturees du printemps : "
+            "corail vif, turquoise eclatant, jaune soleil. Vous portez la couleur pure."
         ),
+        "icons": ["Emma Stone (rousse)", "Isla Fisher", "Nicole Kidman"],
+        "best_summary": "Couleurs vives et pures : corail vif, turquoise, jaune soleil, vert pomme",
+        "avoid_summary": "Couleurs ternes, pastels fanes, gris, beige terne",
+        "black_alt": "Marine profond ou brun espresso (le noir est acceptable si brillant)",
+        "white_alt": "Blanc chaud lumineux",
         "palette_neutrals": ["#FFFAFA", "#F5DEB3", "#8B7355", "#4A4A4A", "#1C1C1C"],
         "palette_accents": ["#FF6B35", "#06D6A0", "#EF476F", "#118AB2", "#FFD166", "#F77F00"],
         "palette_avoid": ["#8B8C7A", "#B5838D", "#C2B280", "#A39BA8", "#6D6875", "#5F7A61"],
@@ -99,35 +179,72 @@ SEASON_ADVICE = {
             "lips": ["Corail vif", "Rose chaud vif", "Rouge tomate", "Fuchsia chaud"],
             "eyes": ["Turquoise", "Vert emeraude chaud", "Bronze brillant", "Violet chaud"],
             "blush": ["Corail lumineux", "Peche vif", "Rose chaud"],
-            "eyebrows": "Chatain chaud, brun dore — jamais gris"
+            "eyebrows": "Chatain chaud, brun dore — jamais gris",
+            "look_naturel": "Teint lumineux + mascara noir + levres corail + blush peche vif",
+            "look_soiree": "Smoky emeraude et or + levres rouge tomate + blush corail",
+            "look_pro": "Teint impeccable + levres rose chaud vif + yeux bronze lumineux",
         },
         "clothing": {
             "best_combinations": [
                 "Corail vif + turquoise",
-                "Jaune soleil + bleu cobalt",
+                "Jaune soleil + bleu cobalt chaud",
                 "Vert pomme + rose vif",
-                "Blanc + orange eclatant"
+                "Blanc + orange eclatant",
             ],
             "patterns": "Geometriques, color-block, imprime graphique, rayures contrastees",
-            "contrast_tip": "Contraste eleve. Vous portez les couleurs pures et vives. Evitez le terne.",
-            "fabrics": "Soie brillante, coton sature, cuir lisse, materiaux a reflets"
+            "pattern_scale": "Tous formats. Vous pouvez porter des motifs audacieux et grands.",
+            "contrast_tip": "Contraste ELEVE. Vous portez les couleurs pures et vives. Le terne vous eteint.",
+            "fabrics": "Soie brillante, coton sature, cuir lisse, materiaux a reflets",
+            "capsule": [
+                "Jean brut fonce",
+                "Pantalon blanc",
+                "Top corail vif",
+                "Blazer turquoise",
+                "Robe jaune soleil",
+                "T-shirt vert pomme",
+                "Veste marine brillant",
+            ],
+            "shopping_tip": "Si une couleur vous semble 'trop vive', elle est probablement parfaite pour vous. Ce sont les couleurs ternes qui vous desservent.",
         },
         "hair": {
-            "ideal": ["Chatain dore vif", "Auburn eclatant", "Blond dore chaud"],
-            "avoid": ["Cendre", "Gris", "Brun terne", "Noir mat"]
+            "ideal": ["Chatain dore vif", "Auburn eclatant", "Blond dore chaud", "Roux cuivre"],
+            "avoid": ["Cendre", "Gris", "Brun terne", "Noir mat"],
+            "tips": "Gardez de la chaleur et de la brillance. Les reflets cuivres vifs sont votre signature.",
         },
         "accessories": {
             "glasses": "Montures colorees vives, ecaille, or brillant",
-            "jewelry": "Or jaune, pierres vives (emeraude, rubis, turquoise, citrine)",
-            "bags_shoes": "Couleurs vives ou cognac. Le noir est OK si brillant."
-        }
+            "jewelry": "Or jaune, emeraude, rubis, turquoise, citrine",
+            "bags_shoes": "Couleurs vives ou cognac. Le noir est OK si verni/brillant.",
+            "scarves": "Corail vif, turquoise, jaune, vert pomme",
+            "nails": "Rouge tomate, corail vif, turquoise, fuchsia chaud",
+        },
+        "expert": {
+            "draping_confirm": ["Corail vif pur", "Turquoise eclatant", "Jaune soleil"],
+            "draping_reject": ["Kaki (eteint)", "Mauve (affadit)", "Beige (rend terne)"],
+            "confused_with": "Bright Winter (verifier la temperature : BW est froid, BS est chaud). Aussi True Spring (BS est plus sature).",
+            "key_differentiator": "La SATURATION est dominante. C'est le printemps le plus vif. Les couleurs sourdes l'eteignent completement.",
+            "coaching_notes": "Cette cliente peut avoir peur des couleurs vives ('c'est trop'). Faites-lui essayer un top corail vif vs un beige terne pres du visage. La difference est spectaculaire — le corail l'illumine, le beige la rend invisible.",
+            "common_mistakes": [
+                "Se refugier dans le beige/gris par 'securite'",
+                "Choisir des pastels (trop fades) au lieu de couleurs pures",
+                "Porter du noir mat au lieu de marine brillant",
+                "Maquillage nude trop discret (elle a besoin de couleur)",
+            ],
+            "skin_variations": "Souvent teints clairs a moyens avec un contraste naturel eleve (cheveux fonces + peau claire a doree). Frequent chez les rousses naturelles.",
+        },
     },
 
     "True Spring": {
+        "tagline": "La joie pure du printemps",
         "description": (
-            "L'essence du printemps. Equilibre parfait entre chaleur, clarte et vivacite. "
-            "Couleurs pures et joyeuses : vert gazon, rouge coquelicot, bleu ciel."
+            "L'equilibre parfait entre chaleur, clarte et vivacite. "
+            "Couleurs pures et joyeuses : vert gazon, rouge coquelicot, jaune jonquille, bleu ciel."
         ),
+        "icons": ["Cameron Diaz", "Reese Witherspoon", "Charlize Theron"],
+        "best_summary": "Couleurs pures et joyeuses : vert gazon, corail, jaune, bleu ciel chaud",
+        "avoid_summary": "Sombre, froid, terne : noir, gris, bordeaux froid, lavande",
+        "black_alt": "Brun chaud moyen ou marine",
+        "white_alt": "Blanc ivoire ou creme chaud",
         "palette_neutrals": ["#FFFFF0", "#D2B48C", "#8B7355", "#556B2F", "#3B3B3B"],
         "palette_accents": ["#FF5733", "#FFC300", "#28B463", "#FF69B4", "#00B4D8", "#FF8C00"],
         "palette_avoid": ["#1C1C1C", "#800020", "#4B0082", "#2F4F4F", "#808080", "#C0C0C0"],
@@ -137,38 +254,74 @@ SEASON_ADVICE = {
             "lips": ["Corail pur", "Rouge tomate", "Rose peche", "Nude dore"],
             "eyes": ["Vert gazon", "Bronze", "Peche", "Bleu chaud", "Brun chaud"],
             "blush": ["Corail", "Peche", "Rose chaud"],
-            "eyebrows": "Chatain dore moyen"
+            "eyebrows": "Chatain dore moyen",
+            "look_naturel": "Teint frais + mascara brun + levres peche + blush corail leger",
+            "look_soiree": "Fard bronze et vert + levres rouge tomate + blush peche intense",
+            "look_pro": "Teint naturel parfait + levres nude rose chaud + yeux peche",
         },
         "clothing": {
             "best_combinations": [
-                "Bleu cobalt + corail",
+                "Bleu cobalt chaud + corail",
                 "Vert prairie + jaune",
                 "Ivoire + rouge coquelicot",
-                "Turquoise + peche"
+                "Turquoise + peche",
             ],
             "patterns": "Floraux, rayures, pois, motifs naturels, mix & match",
+            "pattern_scale": "Moyens. Equilibres comme votre palette.",
             "contrast_tip": "Contraste moyen a eleve. Couleurs pures, jamais trop sombres ou trop passees.",
-            "fabrics": "Coton, lin colore, soie, jersey, denim"
+            "fabrics": "Coton, lin colore, soie, jersey, denim",
+            "capsule": [
+                "Jean moyen classique",
+                "Pantalon creme chaud",
+                "Chemise bleu ciel chaud",
+                "Pull corail",
+                "Veste vert olive clair",
+                "Robe jaune jonquille",
+                "T-shirt blanc ivoire",
+            ],
+            "shopping_tip": "Vos couleurs sont celles d'un jardin au printemps : vives, pures, joyeuses. Si une couleur semble 'sale' ou 'grise', elle n'est pas pour vous.",
         },
         "hair": {
             "ideal": ["Chatain dore", "Blond chaud moyen", "Auburn", "Roux naturel"],
-            "avoid": ["Noir profond", "Cendre", "Gris", "Blond platine"]
+            "avoid": ["Noir profond", "Cendre", "Gris", "Blond platine"],
+            "tips": "Le chatain dore est votre couleur naturelle ideale. Les reflets miel dorent votre teint.",
         },
         "accessories": {
             "glasses": "Dore, ecaille, transparent, couleurs vives",
             "jewelry": "Or jaune, pierres colorees vives, email, bijoux fantaisie colores",
-            "bags_shoes": "Cognac, tan, couleurs vives, blanc casse. Noir a eviter."
-        }
+            "bags_shoes": "Cognac, tan, couleurs vives, blanc casse. Noir a eviter.",
+            "scarves": "Corail, vert, jaune, turquoise",
+            "nails": "Corail, rouge orange, peche, vert d'eau",
+        },
+        "expert": {
+            "draping_confirm": ["Corail pur", "Vert gazon", "Jaune jonquille"],
+            "draping_reject": ["Bordeaux froid (assombrit)", "Gris (eteint)", "Noir (creuse)"],
+            "confused_with": "Light Spring (LS est plus pastel, TS est plus sature). Bright Spring (BS est plus vif/eclat). Warm Spring (WS est plus dore, TS est plus equilibre).",
+            "key_differentiator": "L'EQUILIBRE est la cle. Ni trop pastel, ni trop vif, ni trop dore. C'est le printemps 'classique' au centre de la famille.",
+            "coaching_notes": "C'est la saison la plus facile a habiller car sa palette est large et equilibree. Le piege : se laisser tenter par des couleurs froides 'passe-partout' (gris, bleu marine froid, noir).",
+            "common_mistakes": [
+                "Trop de noir dans la garde-robe",
+                "Confondre bleu marine froid (non) et bleu marine chaud (oui)",
+                "Maquillage trop froid (fond de teint rose)",
+            ],
+            "skin_variations": "Carnation claire a medium doree. Frequent chez les caucasiennes blondes/chataines a sous-ton chaud, les asiatiques de l'Est a sous-ton dore.",
+        },
     },
 
     # ================================================================
     # SUMMER — Froid + Clair
     # ================================================================
     "Light Summer": {
+        "tagline": "La brume douce de l'aube",
         "description": (
-            "Douceur etheree. Couleurs froides, claires et delicates comme une brume estivale. "
+            "Fraicheur etheree. Couleurs froides, claires et delicates comme une brume estivale. "
             "Pastels froids, lavande, bleu poudre, rose doux."
         ),
+        "icons": ["Elle Fanning", "Naomi Watts", "Gwyneth Paltrow"],
+        "best_summary": "Pastels froids : lavande, bleu poudre, rose doux, menthe glacee",
+        "avoid_summary": "Couleurs chaudes, orange, moutarde, noir, or jaune",
+        "black_alt": "Gris charbon doux ou bleu marine",
+        "white_alt": "Blanc rosé ou blanc optique doux",
         "palette_neutrals": ["#F0F0F0", "#C0C0C0", "#A9A9B0", "#6B6B7B", "#4A4A5A"],
         "palette_accents": ["#CDB4DB", "#BDE0FE", "#FFAFCC", "#A2D2FF", "#D0D1FF", "#98D8C8"],
         "palette_avoid": ["#FF4500", "#FF8C00", "#8B4513", "#DAA520", "#556B2F", "#000000"],
@@ -178,35 +331,72 @@ SEASON_ADVICE = {
             "lips": ["Rose poudre", "Mauve clair", "Rose nude froid", "Framboise douce"],
             "eyes": ["Lavande", "Gris perle", "Rose froid", "Bleu doux", "Taupe froid"],
             "blush": ["Rose doux", "Mauve clair", "Rose frais"],
-            "eyebrows": "Blond cendre, taupe froid, gris doux"
+            "eyebrows": "Blond cendre, taupe froid, gris doux",
+            "look_naturel": "Teint frais + mascara brun-noir + levres rose nude + blush rose doux",
+            "look_soiree": "Fard lavande et argent + levres framboise + blush mauve",
+            "look_pro": "Teint mat naturel + levres rose poudre + yeux taupe clair",
         },
         "clothing": {
             "best_combinations": [
                 "Lavande + gris perle",
                 "Rose poudre + bleu ciel",
                 "Creme froid + mauve",
-                "Bleu poudre + blanc doux"
+                "Bleu poudre + blanc doux",
             ],
             "patterns": "Floraux delicats, aquarelle, rayures fines, ton sur ton",
-            "contrast_tip": "Contraste bas. Tout en douceur, pas de rupture brutale.",
-            "fabrics": "Mousseline, soie fluide, coton doux, cachemire fin, organza"
+            "pattern_scale": "Petits a moyens. La delicatesse est votre force.",
+            "contrast_tip": "Contraste BAS. Tout en douceur, pas de rupture brutale.",
+            "fabrics": "Mousseline, soie fluide, coton doux, cachemire fin, organza",
+            "capsule": [
+                "Jean gris clair",
+                "Pantalon bleu poudre",
+                "Blouse lavande",
+                "Cardigan rose poudre",
+                "Trench gris perle",
+                "Robe bleu ciel",
+                "T-shirt blanc rose",
+            ],
+            "shopping_tip": "Vos couleurs sont celles d'un ciel d'ete au petit matin : douces, fraiches, lumineuses. Si un vetement semble 'dur' ou 'lourd', il n'est pas pour vous.",
         },
         "hair": {
             "ideal": ["Blond cendre clair", "Blond platine doux", "Chatain clair cendre"],
-            "avoid": ["Roux", "Auburn", "Noir", "Chatain dore"]
+            "avoid": ["Roux", "Auburn", "Noir", "Chatain dore"],
+            "tips": "Le blond cendre est votre signature naturelle. Les reflets perles ou argentes subliment votre teint.",
         },
         "accessories": {
             "glasses": "Argent, transparent, rose pale, lilas",
             "jewelry": "Argent, or blanc, perles, quartz rose, aigue-marine, opale",
-            "bags_shoes": "Gris clair, taupe froid, rose poudre, bleu gris. Pas de marron chaud."
-        }
+            "bags_shoes": "Gris clair, taupe froid, rose poudre, bleu gris. Pas de marron chaud.",
+            "scarves": "Lavande, bleu poudre, rose doux, gris perle",
+            "nails": "Rose poudre, mauve clair, nude froid, bleu glace",
+        },
+        "expert": {
+            "draping_confirm": ["Lavande", "Rose poudre froid", "Bleu ciel"],
+            "draping_reject": ["Orange (clash)", "Moutarde (jaunit)", "Noir (ecrase)"],
+            "confused_with": "Light Spring (verifier la temperature : LS est chaud, Light Summer est froid). Soft Summer (Light Summer est plus clair, Soft est plus mute).",
+            "key_differentiator": "La CLARTE FROIDE est dominante. C'est l'ete le plus lumineux et pastel. Comme Light Spring mais en version froide.",
+            "coaching_notes": "Attention au piege du 'rose'. Cette cliente porte le rose FROID (mauve, lilas), pas le rose CHAUD (corail, saumon). Testez les deux cote a cote pour montrer la difference.",
+            "common_mistakes": [
+                "Confondre rose chaud (corail) et rose froid (mauve)",
+                "Porter du noir en pensant que ca va avec tout",
+                "Bijoux or jaune qui rechauffent trop",
+                "Maquillage peche/abricot au lieu de rose froid",
+            ],
+            "skin_variations": "Peau tres claire a rose ou neutre froide. Frequent chez les nordiques, slaves, et asiatiques tres claires a sous-ton froid.",
+        },
     },
 
     "Cool Summer": {
+        "tagline": "L'elegance glacee du crepuscule",
         "description": (
-            "Elegance froide. Couleurs froides, moyennement profondes, sophistiquees. "
+            "Sophistication froide. Couleurs froides, moyennement profondes et elegantes. "
             "Bleu acier, rose cendre, bordeaux froid, gris bleu."
         ),
+        "icons": ["Olivia Wilde", "Kate Middleton", "Emily Blunt"],
+        "best_summary": "Bleu acier, rose cendre, bordeaux froid, gris bleu, prune",
+        "avoid_summary": "Orange, moutarde, dore, rouille, vert olive",
+        "black_alt": "Gris charbon ou bleu marine profond",
+        "white_alt": "Blanc pur ou blanc bleu",
         "palette_neutrals": ["#F0EFF4", "#9A8C98", "#6D6875", "#4A4E69", "#2B2D42"],
         "palette_accents": ["#7B9EA8", "#C9ADA7", "#84A98C", "#B5838D", "#9CADB7", "#8B687D"],
         "palette_avoid": ["#FF8C00", "#FFD700", "#FF4500", "#DAA520", "#8B4513", "#556B2F"],
@@ -216,35 +406,72 @@ SEASON_ADVICE = {
             "lips": ["Rose mauve", "Framboise", "Prune douce", "Rose-brun froid"],
             "eyes": ["Gris bleu", "Taupe froid", "Mauve", "Argent", "Prune"],
             "blush": ["Rose froid", "Mauve", "Framboise douce"],
-            "eyebrows": "Brun froid, taupe, cendre"
+            "eyebrows": "Brun froid, taupe, cendre",
+            "look_naturel": "Teint mat + mascara noir + levres rose mauve + blush rose froid",
+            "look_soiree": "Smoky gris bleu + levres prune + blush framboise",
+            "look_pro": "Teint impeccable + levres rose-brun + yeux taupe froid",
         },
         "clothing": {
             "best_combinations": [
                 "Gris bleu + rose cendre",
                 "Marine froid + lavande",
                 "Bordeaux froid + gris perle",
-                "Bleu acier + blanc froid"
+                "Bleu acier + blanc froid",
             ],
             "patterns": "Classiques, Prince-de-Galles, rayures, geometriques sobres",
+            "pattern_scale": "Moyens. L'elegance classique est votre registre.",
             "contrast_tip": "Contraste moyen. Sophistication et harmonie froide.",
-            "fabrics": "Laine fine, cachemire, soie mate, crepe, gabardine"
+            "fabrics": "Laine fine, cachemire, soie mate, crepe, gabardine",
+            "capsule": [
+                "Jean fonce brut",
+                "Pantalon gris charbon",
+                "Chemise blanche pure",
+                "Pull bordeaux froid",
+                "Blazer bleu marine",
+                "Robe gris bleu",
+                "T-shirt gris perle",
+            ],
+            "shopping_tip": "Pensez 'glacer' plutot que 'rechauffer'. Vos couleurs ont toujours une pointe de bleu ou de gris. Si une couleur semble 'chaude' ou 'doree', passez votre chemin.",
         },
         "hair": {
             "ideal": ["Chatain cendre", "Brun froid", "Blond fonce cendre"],
-            "avoid": ["Roux", "Dore", "Auburn", "Caramel"]
+            "avoid": ["Roux", "Dore", "Auburn", "Caramel"],
+            "tips": "Les reflets cendres ou froids sont vos allies. Le balayage froid (blond cendre sur brun) est elegant.",
         },
         "accessories": {
             "glasses": "Argent, gris, bleu marine, noir doux",
-            "jewelry": "Argent, platine, perles grises, saphir, tanzanite, améthyste",
-            "bags_shoes": "Noir, gris, marine, bordeaux froid, taupe. Pas de marron ni camel."
-        }
+            "jewelry": "Argent, platine, perles grises, saphir, tanzanite, amethyste",
+            "bags_shoes": "Noir, gris, marine, bordeaux froid, taupe. Pas de marron ni camel.",
+            "scarves": "Gris bleu, bordeaux froid, mauve, bleu acier",
+            "nails": "Rose mauve, gris lilas, bordeaux froid, argent",
+        },
+        "expert": {
+            "draping_confirm": ["Bleu acier", "Rose cendre", "Bordeaux froid"],
+            "draping_reject": ["Orange (catastrophe)", "Moutarde (jaunit)", "Or chaud (clash)"],
+            "confused_with": "True Summer (TS est plus equilibre, CS est plus franchement froid). Cool Winter (verifier la valeur : CS est plus clair que CW).",
+            "key_differentiator": "Le FROID est dominant. C'est l'ete le plus glacial. La temperature est la premiere chose qu'on remarque.",
+            "coaching_notes": "Ce client a souvent un style naturellement elegant et classique. Le risque est la monotonie gris-marine-noir. Introduisez progressivement la couleur via les accessoires (foulard bordeaux, bijou amethyste) avant les vetements.",
+            "common_mistakes": [
+                "Garde-robe tout-noir sans variation",
+                "Camel 'classique' au lieu de gris",
+                "Fond de teint trop dore",
+                "Dore 'pour changer' alors que l'argent est parfait",
+            ],
+            "skin_variations": "Peau claire a medium a sous-ton rose ou neutre froid. Tres frequent chez les caucasiennes brunes, les est-europeennes, et les est-asiatiques a sous-ton froid.",
+        },
     },
 
     "Soft Summer": {
+        "tagline": "La douceur veloutee de la brume",
         "description": (
-            "Douceur feutree. Couleurs desaturees, froides et voilees. "
-            "Rien de vif ni de criard. Rose poudre, sauge, bleu gris, mauve."
+            "Tout en nuances feutrees. Couleurs froides, desaturees et voilees. "
+            "Rien de vif : rose fane, sauge, bleu gris, mauve, taupe."
         ),
+        "icons": ["Jennifer Lopez", "Sarah Jessica Parker", "Drew Barrymore"],
+        "best_summary": "Couleurs douces et muted : rose fane, sauge, bleu gris, taupe",
+        "avoid_summary": "Couleurs vives pures, noir, blanc pur, orange, jaune vif",
+        "black_alt": "Gris charbon chaud ou bleu marine doux",
+        "white_alt": "Blanc casse ou gris tres clair",
         "palette_neutrals": ["#EDEBE8", "#C9CBA3", "#A39BA8", "#8D99AE", "#5A5A6E"],
         "palette_accents": ["#B5838D", "#95B8D1", "#CEB5A7", "#A8A4CE", "#B8B8D1", "#8DAA9D"],
         "palette_avoid": ["#FF0000", "#FF8C00", "#00FF00", "#FFD700", "#FF1493", "#000000"],
@@ -254,35 +481,72 @@ SEASON_ADVICE = {
             "lips": ["Rose poudre", "Mauve", "Nude rose froid", "Baie douce"],
             "eyes": ["Taupe", "Gris lavande", "Rose fane", "Vert sauge", "Brun doux froid"],
             "blush": ["Rose sourd", "Mauve doux", "Peche froid"],
-            "eyebrows": "Taupe, brun doux froid — jamais de trait net"
+            "eyebrows": "Taupe, brun doux froid — jamais de trait net",
+            "look_naturel": "Teint naturel + mascara brun + levres nude rose + blush rose sourd",
+            "look_soiree": "Fard taupe et lavande + levres mauve + blush rose doux",
+            "look_pro": "Teint unifie mat + levres rose poudre + yeux taupe discret",
         },
         "clothing": {
             "best_combinations": [
                 "Sauge + rose fane",
                 "Bleu gris + mauve",
                 "Taupe + lavande",
-                "Gris perle + vieux rose"
+                "Gris perle + vieux rose",
             ],
             "patterns": "Ton sur ton, imprime discret, paisley doux, melange, tweed pastel",
+            "pattern_scale": "Petits a moyens, toujours doux. Jamais de motifs criards.",
             "contrast_tip": "Contraste BAS. C'est votre marque : tout en harmonie douce, jamais de rupture.",
-            "fabrics": "Cachemire, laine merinos, jersey doux, daim, lin lave, maille"
+            "fabrics": "Cachemire, laine merinos, jersey doux, daim, lin lave, maille",
+            "capsule": [
+                "Jean gris moyen",
+                "Pantalon taupe",
+                "Blouse rose fane",
+                "Pull sauge",
+                "Veste gris bleu",
+                "Robe mauve doux",
+                "T-shirt gris perle",
+            ],
+            "shopping_tip": "Si une couleur semble 'hurlante' ou 'agressive', elle n'est pas pour vous. Vos couleurs murmurent — elles sont douces, fondues, comme vues a travers un voile.",
         },
         "hair": {
             "ideal": ["Chatain moyen cendre", "Blond fonce cendre", "Brun doux cendre"],
-            "avoid": ["Noir profond", "Roux vif", "Blond dore", "Meches contrastees"]
+            "avoid": ["Noir profond", "Roux vif", "Blond dore", "Meches contrastees"],
+            "tips": "Le secret : pas de contraste. Evitez les meches trop claires sur une base foncee. Preferez un balayage subtil ton sur ton.",
         },
         "accessories": {
             "glasses": "Taupe, gris doux, transparent, rose poudre",
-            "jewelry": "Argent mat, or rose, perles, quartz rose, labradorite, pierres de lune",
-            "bags_shoes": "Taupe, gris, vieux rose, bleu gris. Eviter noir pur et marron chaud."
-        }
+            "jewelry": "Argent mat, or rose, perles, quartz rose, labradorite, pierre de lune",
+            "bags_shoes": "Taupe, gris, vieux rose, bleu gris. Eviter noir pur et marron chaud.",
+            "scarves": "Mauve, sauge, rose fane, gris lavande",
+            "nails": "Rose poudre, mauve, nude gris rose, taupe clair",
+        },
+        "expert": {
+            "draping_confirm": ["Rose fane", "Sauge", "Bleu gris doux"],
+            "draping_reject": ["Rouge vif (agresse)", "Noir (ecrase)", "Orange (clash total)"],
+            "confused_with": "Soft Autumn (verifier la temperature : SA est chaud, Soft Summer est froid). Light Summer (LS est plus clair, SS est plus mute).",
+            "key_differentiator": "La DOUCEUR est dominante. C'est la saison la plus muted de toutes. Toute couleur vive la submerge.",
+            "coaching_notes": "C'est souvent la saison la plus difficile a accepter. Les clientes veulent de la couleur vive et sont decues par le 'gris rose'. Montrez-leur avec des drapes que les couleurs vives les eteignent litteralement — le contraste avec une couleur muted est saisissant.",
+            "common_mistakes": [
+                "Vouloir porter du rouge vif ou du fuchsia",
+                "Noir systematique (preferer gris charbon)",
+                "Meches trop contrastees dans les cheveux",
+                "Maquillage trop colore (le 'less is more' est la cle)",
+            ],
+            "skin_variations": "Peau neutre a froide, souvent ni tres claire ni tres foncee. Le 'in between' par excellence. Frequent chez toutes les ethnicites a sous-ton neutre-froid.",
+        },
     },
 
     "True Summer": {
+        "tagline": "La fraicheur equilibree de l'ocean",
         "description": (
-            "L'essence de l'ete. Equilibre entre fraicheur, clarte et douceur. "
+            "L'essence de l'ete. Equilibre parfait entre fraicheur, clarte et douceur. "
             "Rose vrai, bleu moyen, vert ocean, pervenche."
         ),
+        "icons": ["Lupita Nyong'o (peau foncee ete)", "Cate Blanchett", "Zendaya"],
+        "best_summary": "Rose vrai, bleu moyen, pervenche, vert ocean, prune douce",
+        "avoid_summary": "Orange, moutarde, rouille, vert olive, noir pur",
+        "black_alt": "Marine profond ou gris anthracite",
+        "white_alt": "Blanc doux ou blanc rose",
         "palette_neutrals": ["#F0F0F0", "#B0B0BC", "#6B6B7B", "#4A4E69", "#1D3557"],
         "palette_accents": ["#DB7093", "#2A6F97", "#66CDAA", "#7678ED", "#C77DFF", "#BA68C8"],
         "palette_avoid": ["#FF4500", "#DAA520", "#8B4513", "#FF8C00", "#556B2F", "#000000"],
@@ -292,38 +556,75 @@ SEASON_ADVICE = {
             "lips": ["Rose vrai", "Framboise", "Mauve rose", "Rose the"],
             "eyes": ["Pervenche", "Gris bleu", "Rose", "Vert ocean", "Prune douce"],
             "blush": ["Rose vrai", "Framboise douce", "Rose mauve"],
-            "eyebrows": "Brun moyen froid, taupe"
+            "eyebrows": "Brun moyen froid, taupe",
+            "look_naturel": "Teint frais + mascara noir + levres rose vrai + blush rose",
+            "look_soiree": "Fard pervenche et prune + levres framboise + blush rose intense",
+            "look_pro": "Teint naturel + levres rose the + yeux gris bleu subtil",
         },
         "clothing": {
             "best_combinations": [
                 "Marine + rose",
                 "Pervenche + blanc",
                 "Vert ocean + gris",
-                "Prune douce + bleu ciel"
+                "Prune douce + bleu ciel",
             ],
             "patterns": "Rayures classiques, floraux moyens, imprime geometrique doux",
+            "pattern_scale": "Moyens. L'equilibre est votre force.",
             "contrast_tip": "Contraste moyen. Couleurs fraiches mais jamais criardes.",
-            "fabrics": "Coton, jersey, soie, lin, laine legere"
+            "fabrics": "Coton, jersey, soie, lin, laine legere",
+            "capsule": [
+                "Jean bleu moyen",
+                "Pantalon marine",
+                "Blouse pervenche",
+                "Pull rose vrai",
+                "Blazer gris bleu",
+                "Robe vert ocean",
+                "T-shirt blanc doux",
+            ],
+            "shopping_tip": "Vos couleurs sont celles de la mer en ete : fraiches, vivantes mais jamais agressives. Pensez 'brise marine' plutot que 'tempete'.",
         },
         "hair": {
             "ideal": ["Chatain cendre moyen", "Brun moyen froid", "Blond fonce cendre"],
-            "avoid": ["Roux", "Dore", "Noir bleu", "Caramel"]
+            "avoid": ["Roux", "Dore", "Noir bleu", "Caramel"],
+            "tips": "Les reflets froids (cendre, platine subtil) sont parfaits. Evitez tout ce qui est cuivre ou dore.",
         },
         "accessories": {
             "glasses": "Argent, gris bleu, marine, transparent bleu",
             "jewelry": "Argent, or blanc, perles, saphir, tanzanite, aigue-marine",
-            "bags_shoes": "Marine, gris, taupe froid, bordeaux froid."
-        }
+            "bags_shoes": "Marine, gris, taupe froid, bordeaux froid.",
+            "scarves": "Pervenche, rose, vert ocean, marine",
+            "nails": "Rose vrai, pervenche, mauve, gris bleu",
+        },
+        "expert": {
+            "draping_confirm": ["Rose vrai", "Pervenche", "Vert ocean"],
+            "draping_reject": ["Orange (clash)", "Moutarde (jaunit)", "Rouille (clash de temperature)"],
+            "confused_with": "Cool Summer (CS est plus froid, TS est plus equilibre). True Winter (verifier la valeur : TS est plus clair). Light Summer (LS est plus pastel).",
+            "key_differentiator": "L'EQUILIBRE FROID. C'est l'ete 'classique' — ni trop clair, ni trop mute, ni trop froid. Le centre de la famille.",
+            "coaching_notes": "Saison polyvalente et facile a habiller. Le piege est le 'trop chaud' : cette cliente peut etre tentee par les tons terre (camel, olive) qui sont partout mais qui la ternissent.",
+            "common_mistakes": [
+                "Camel/cognac au lieu de gris/marine",
+                "Bijoux or jaune",
+                "Fond de teint dore au lieu de rose",
+                "Rouille 'tendance' qui jaunit le teint",
+            ],
+            "skin_variations": "Toutes les carnations a sous-ton neutre-froid equilibre. Se retrouve sur tous les tons de peau, des plus clairs aux plus fonces.",
+        },
     },
 
     # ================================================================
     # AUTUMN — Chaud + Sombre
     # ================================================================
     "Soft Autumn": {
+        "tagline": "La douceur veloutee de la terre",
         "description": (
-            "Douceur terreuse. Couleurs chaudes, desaturees et feutrees. "
-            "Camel, sauge, terre de sienne, kaki, tout en nuances sourdes."
+            "Chaleur feutree. Couleurs chaudes mais adoucies, comme un paysage automnal "
+            "vu a travers la brume : camel, sauge, terre de sienne, kaki."
         ),
+        "icons": ["Jennifer Lopez", "Gigi Hadid", "Shakira"],
+        "best_summary": "Tons terreux doux : camel, sauge, terre de sienne, kaki, peche fane",
+        "avoid_summary": "Couleurs vives, noir, blanc pur, fuchsia, bleu electrique",
+        "black_alt": "Brun chocolat doux ou vert foret profond",
+        "white_alt": "Creme chaud ou ecru",
         "palette_neutrals": ["#EDE8D5", "#C2B280", "#8B8C7A", "#5F5B50", "#3E3D36"],
         "palette_accents": ["#A0937D", "#8DAA9D", "#C9ADA7", "#7F6B5D", "#5F7A61", "#9B8E7E"],
         "palette_avoid": ["#FF0000", "#FF00FF", "#00BFFF", "#FFD700", "#000000", "#F8F8FF"],
@@ -333,73 +634,147 @@ SEASON_ADVICE = {
             "lips": ["Nude peche", "Rose terre", "Brique douce", "Caramel"],
             "eyes": ["Taupe chaud", "Kaki", "Brun doux", "Vert sauge", "Bronze mat"],
             "blush": ["Peche sourde", "Abricot doux", "Terre cuite claire"],
-            "eyebrows": "Chatain chaud doux, taupe chaud"
+            "eyebrows": "Chatain chaud doux, taupe chaud",
+            "look_naturel": "Teint naturel + mascara brun + levres nude peche + blush abricot doux",
+            "look_soiree": "Smoky taupe et bronze mat + levres brique douce + blush terre cuite",
+            "look_pro": "Teint unifie mat + levres nude rose terre + yeux taupe discret",
         },
         "clothing": {
             "best_combinations": [
                 "Camel + sauge",
                 "Taupe chaud + rose terre",
                 "Kaki + creme chaud",
-                "Olive doux + peche fane"
+                "Olive doux + peche fane",
             ],
             "patterns": "Paisley, tartans doux, motifs naturels, imprime animal discret, melange",
+            "pattern_scale": "Petits a moyens, toujours doux. Les motifs fondus sont ideaux.",
             "contrast_tip": "Contraste BAS. Harmonies ton sur ton, camaieu terreux.",
-            "fabrics": "Daim, laine feutree, lin lave, cachemire, coton epais, velours cotele"
+            "fabrics": "Daim, laine feutree, lin lave, cachemire, coton epais, velours cotele",
+            "capsule": [
+                "Jean camel ou kaki",
+                "Pantalon taupe",
+                "Chemise creme chaud",
+                "Pull sauge",
+                "Veste kaki",
+                "Robe terre de sienne",
+                "T-shirt ecru",
+            ],
+            "shopping_tip": "Vos couleurs sont celles de la nature en automne a travers un voile de brume. Si une couleur semble 'vive' ou 'electrique', elle n'est pas pour vous.",
         },
         "hair": {
             "ideal": ["Chatain chaud moyen", "Blond fonce dore", "Brun chaud doux"],
-            "avoid": ["Noir", "Blond platine", "Cendre", "Roux vif"]
+            "avoid": ["Noir", "Blond platine", "Cendre", "Roux vif"],
+            "tips": "Le chatain chaud doux est votre couleur naturelle. Les reflets miel subtils sont parfaits. Evitez les contrastes.",
         },
         "accessories": {
             "glasses": "Ecaille douce, taupe, nude, kaki",
             "jewelry": "Or jaune mat, bois, pierres naturelles (jaspe, agate, oeil de tigre)",
-            "bags_shoes": "Camel, taupe, cognac, olive. Pas de noir ni blanc pur."
-        }
+            "bags_shoes": "Camel, taupe, cognac doux, olive. Pas de noir ni blanc pur.",
+            "scarves": "Sauge, camel, terre de sienne, rose fane chaud",
+            "nails": "Nude chaud, taupe, rose terre, caramel clair",
+        },
+        "expert": {
+            "draping_confirm": ["Sauge", "Terre de sienne douce", "Camel"],
+            "draping_reject": ["Fuchsia (agresse)", "Noir (ecrase)", "Bleu roi (refroidit)"],
+            "confused_with": "Soft Summer (verifier la temperature : SA est chaud, SS est froid — le test cle). True Autumn (TA est plus sature). Warm Autumn (WA est plus intense).",
+            "key_differentiator": "La DOUCEUR CHAUDE est dominante. C'est le croisement entre automne et ete : chaud mais sans eclat, terreux mais sans profondeur.",
+            "coaching_notes": "C'est la saison 'cameleon' : souvent confondue avec Soft Summer ou True Autumn. Le test decisif est la temperature. Placez un tissu sauge chaud et un sauge froid cote a cote pres du visage. La version chaude illumine, la froide eteint.",
+            "common_mistakes": [
+                "Couleurs automne trop vives (rouille vif, moutarde)",
+                "Noir 'passe-partout'",
+                "Couleurs ete froides par confusion",
+                "Maquillage trop marque (le naturel est sa force)",
+            ],
+            "skin_variations": "Peau neutre-chaude, souvent ni tres claire ni tres foncee. Frequent chez les metisses, les mediterraneennes, les latines, et les caucasiennes a sous-ton neutre-chaud.",
+        },
     },
 
     "Warm Autumn": {
+        "tagline": "La richesse doree de la recolte",
         "description": (
-            "Richesse terreuse. Couleurs chaudes, profondes et naturelles. "
+            "Opulence terreuse. Couleurs chaudes, profondes et naturelles. "
             "Rouille, moutarde, vert foret, brique — la terre dans toute sa splendeur."
         ),
+        "icons": ["Beyonce", "Julia Roberts", "Jessica Alba"],
+        "best_summary": "Rouille, moutarde, vert foret, brique, camel, or chaud",
+        "avoid_summary": "Rose froid, bleu electrique, argent, blanc pur, noir pur",
+        "black_alt": "Brun chocolat ou marine profond chaud",
+        "white_alt": "Ivoire chaud ou creme dore",
         "palette_neutrals": ["#F5E6CA", "#8B7355", "#5C4033", "#2E3B2E", "#2D1B0E"],
         "palette_accents": ["#BC6C25", "#DDA15E", "#606C38", "#E76F51", "#CC5803", "#D4A017"],
         "palette_avoid": ["#FF69B4", "#00BFFF", "#C0C0C0", "#F0F0F0", "#FF00FF", "#4169E1"],
         "metals": "Or jaune, bronze, cuivre. Eviter argent froid.",
         "makeup": {
-            "foundation": "Sous-ton dore/peche fonce. Eviter les fonds de teint roses.",
+            "foundation": "Sous-ton dore/peche. Eviter les fonds de teint roses.",
             "lips": ["Terracotta", "Brique", "Rouille", "Nude chaud fonce"],
             "eyes": ["Brun chaud", "Kaki", "Bronze", "Cuivre", "Olive", "Rouille"],
             "blush": ["Peche fonce", "Abricot", "Terracotta doux"],
-            "eyebrows": "Brun chaud, auburn — jamais gris ni cendre"
+            "eyebrows": "Brun chaud, auburn — jamais gris ni cendre",
+            "look_naturel": "Teint dore + mascara brun + levres nude chaud + blush peche",
+            "look_soiree": "Smoky bronze et olive + levres brique + blush terracotta",
+            "look_pro": "Teint impeccable dore + levres terracotta doux + yeux bronze discret",
         },
         "clothing": {
             "best_combinations": [
                 "Camel + vert olive",
                 "Rouille + creme chaud",
                 "Brun chocolat + orange brulee",
-                "Moutarde + vert foret"
+                "Moutarde + vert foret",
             ],
             "patterns": "Paisley, tartans chauds, imprime ethnique, pied-de-poule terreux",
-            "contrast_tip": "Contraste moyen. Eviter noir/blanc pur. Le marine chaud remplace le noir.",
-            "fabrics": "Tweed, velours, daim, laine, cuir vieilli, velours cotele"
+            "pattern_scale": "Moyens a grands. Les motifs riches et textures sont vos allies.",
+            "contrast_tip": "Contraste moyen. Le marine profond chaud remplace le noir.",
+            "fabrics": "Tweed, velours, daim, laine, cuir vieilli, velours cotele",
+            "capsule": [
+                "Jean brut indigo",
+                "Pantalon camel",
+                "Chemise ivoire chaud",
+                "Pull moutarde",
+                "Veste olive",
+                "Robe rouille",
+                "T-shirt creme dore",
+            ],
+            "shopping_tip": "La regle d'or : si le vetement semble 'terreux' et 'naturel', c'est probablement parfait. Si il semble 'electrique' ou 'glacial', reposez-le.",
         },
         "hair": {
             "ideal": ["Chatain dore fonce", "Auburn", "Brun chaud", "Cuivre"],
-            "avoid": ["Blond platine", "Noir bleu", "Cendre", "Gris"]
+            "avoid": ["Blond platine", "Noir bleu", "Cendre", "Gris"],
+            "tips": "Les reflets cuivres et auburn sont votre signature. Le balayage caramel illumine le visage.",
         },
         "accessories": {
             "glasses": "Ecaille chaude, bronze, havane, ambre",
             "jewelry": "Or jaune, ambre, corail, turquoise, bois, cuivre",
-            "bags_shoes": "Brun, cognac, camel, olive. Pas de noir pur."
-        }
+            "bags_shoes": "Brun, cognac, camel, olive. Pas de noir pur.",
+            "scarves": "Rouille, olive, moutarde, brique",
+            "nails": "Terracotta, rouille, nude chaud, brun dore, bordeaux chaud",
+        },
+        "expert": {
+            "draping_confirm": ["Rouille vif", "Olive fonce", "Or chaud"],
+            "draping_reject": ["Rose froid (eteint le teint)", "Bleu roi (refroidit)", "Gris (aplatit)"],
+            "confused_with": "True Autumn (TA est plus equilibre, WA est plus franchement dore). Deep Autumn (DA est plus sombre). Warm Spring (WS est plus clair).",
+            "key_differentiator": "La CHALEUR est dominante. C'est l'automne le plus dore. Le sous-ton est franchement chaud, pas juste legerement.",
+            "coaching_notes": "Le defi classique : le noir. Cette cliente porte du noir par reflexe. Montrez-lui la difference spectaculaire entre un col noir (creuse le visage, cree des ombres) et un col brun chocolat ou camel (illumine, rechauffe). C'est le declic.",
+            "common_mistakes": [
+                "Porter du noir pur au lieu de brun/marine chaud",
+                "Choisir du rose froid au lieu de peche/corail",
+                "Bijoux argentes qui contrastent froidement",
+                "Fond de teint rose au lieu de dore",
+            ],
+            "skin_variations": "Toutes les carnations a sous-ton franchement dore. Peau noire doree, peau mediterraneenne olive, peau caucasienne peche fonce, peau latino doree.",
+        },
     },
 
     "Deep Autumn": {
+        "tagline": "L'opulence sombre de la foret",
         "description": (
-            "Profondeur chaleureuse. Les couleurs les plus sombres et riches des saisons chaudes. "
-            "Bordeaux, vert sapin, brun chocolat, prune chaude — opulence terreuse."
+            "Profondeur chaleureuse. Les couleurs les plus riches et sombres des saisons chaudes. "
+            "Bordeaux chaud, vert sapin, brun chocolat, prune chaude."
         ),
+        "icons": ["Penelope Cruz", "Eva Longoria", "Salma Hayek"],
+        "best_summary": "Bordeaux chaud, vert sapin, chocolat, prune chaude, or profond",
+        "avoid_summary": "Pastels, rose vif froid, bleu clair, argent, blanc pur",
+        "black_alt": "Brun tres fonce ou vert foret nuit (le noir est presque acceptable)",
+        "white_alt": "Ivoire riche ou creme dore",
         "palette_neutrals": ["#E8DCC8", "#7F6B5D", "#4A3728", "#2E3B2E", "#1A1A1A"],
         "palette_accents": ["#6B2737", "#8B4513", "#1B5E20", "#8B6914", "#722F37", "#4A5240"],
         "palette_avoid": ["#FFAFCC", "#BDE0FE", "#FFD700", "#98FB98", "#F0F0F0", "#C0C0C0"],
@@ -409,76 +784,150 @@ SEASON_ADVICE = {
             "lips": ["Bordeaux chaud", "Brun rouge", "Prune chaude", "Chocolat"],
             "eyes": ["Bronze fonce", "Vert foret", "Brun intense", "Cuivre", "Olive fonce"],
             "blush": ["Terracotta", "Prune chaude", "Brique"],
-            "eyebrows": "Brun fonce chaud, jamais noir pur"
+            "eyebrows": "Brun fonce chaud, jamais noir pur",
+            "look_naturel": "Teint chaud + mascara brun-noir + levres nude chaud fonce + blush terracotta",
+            "look_soiree": "Smoky bronze fonce et vert foret + levres bordeaux chaud + blush prune",
+            "look_pro": "Teint impeccable + levres brun rouge + yeux bronze fonce discret",
         },
         "clothing": {
             "best_combinations": [
                 "Bordeaux + vert sapin",
                 "Chocolat + or fonce",
                 "Olive fonce + rouille",
-                "Prune chaude + camel"
+                "Prune chaude + camel",
             ],
             "patterns": "Tartans sombres, brocart, imprime baroque, motifs riches",
-            "contrast_tip": "Contraste moyen a eleve. Profondeur et richesse sans le noir pur.",
-            "fabrics": "Velours, soie epaisse, cuir, laine bouillie, brocart, satin mat"
+            "pattern_scale": "Moyens a grands. Les motifs somptueux et textures profondes vous vont.",
+            "contrast_tip": "Contraste moyen a eleve. Profondeur et richesse sont vos atouts.",
+            "fabrics": "Velours, soie epaisse, cuir, laine bouillie, brocart, satin mat",
+            "capsule": [
+                "Jean brut fonce",
+                "Pantalon chocolat",
+                "Chemise ivoire riche",
+                "Pull vert foret",
+                "Blazer bordeaux",
+                "Robe prune chaude",
+                "T-shirt creme dore",
+            ],
+            "shopping_tip": "Pensez 'bijou' : vos couleurs sont celles des pierres precieuses chaudes — grenat, ambre, emeraude, topaze. Si c'est riche et profond, c'est pour vous.",
         },
         "hair": {
             "ideal": ["Brun chaud profond", "Auburn fonce", "Chatain fonce dore"],
-            "avoid": ["Blond clair", "Cendre", "Gris", "Noir bleu"]
+            "avoid": ["Blond clair", "Cendre", "Gris", "Noir bleu"],
+            "tips": "Le brun chaud profond est votre signature. Les reflets acajou ou chocolat ajoutent de la dimension.",
         },
         "accessories": {
             "glasses": "Ecaille foncee, bronze, brun chaud",
             "jewelry": "Or jaune, grenat, oeil de tigre, onyx, citrine fumee",
-            "bags_shoes": "Brun fonce, chocolat, bordeaux, olive fonce."
-        }
+            "bags_shoes": "Brun fonce, chocolat, bordeaux, olive fonce.",
+            "scarves": "Bordeaux, vert sapin, prune, bronze",
+            "nails": "Bordeaux chaud, brun chocolate, prune, or fonce",
+        },
+        "expert": {
+            "draping_confirm": ["Bordeaux chaud", "Vert sapin", "Or antique"],
+            "draping_reject": ["Rose pastel (infantilise)", "Bleu clair (refroidit)", "Gris clair (delave)"],
+            "confused_with": "Deep Winter (verifier la temperature : DA est chaud, DW est froid). Warm Autumn (WA est plus clair). True Autumn (TA est plus modere).",
+            "key_differentiator": "La PROFONDEUR CHAUDE est dominante. C'est l'automne le plus sombre. Les couleurs sont riches, denses, jamais passees.",
+            "coaching_notes": "Cette cliente peut porter du noir mieux que les autres automnes grace a sa profondeur naturelle. Mais montrez-lui que le brun tres fonce ou le vert foret nuit sont encore plus flatteurs car ils ne cassent pas la chaleur de son teint.",
+            "common_mistakes": [
+                "Couleurs trop claires ou pastel",
+                "Argent au lieu d'or",
+                "Maquillage rose froid au lieu de chaud",
+                "Confondre avec Deep Winter (attention a la temperature)",
+            ],
+            "skin_variations": "Peau medium a foncee a sous-ton dore/olive. Tres frequent chez les latines, les sud-asiatiques, les mediterraneennes foncees.",
+        },
     },
 
     "True Autumn": {
+        "tagline": "L'essence chaleureuse de la recolte",
         "description": (
-            "L'essence de l'automne. Equilibre parfait entre chaleur, profondeur et richesse. "
-            "Citrouille, olive, rouille, brun — les couleurs de la recolte."
+            "L'equilibre parfait entre chaleur, profondeur et richesse. "
+            "Citrouille, olive, rouille, brun — les couleurs de la terre et de la moisson."
         ),
+        "icons": ["Jennifer Garner", "Eva Mendes", "Sandra Bullock"],
+        "best_summary": "Citrouille, olive, rouille, brun terreux, teal, camel",
+        "avoid_summary": "Rose froid, bleu electrique, argent, blanc pur, noir pur",
+        "black_alt": "Brun chaud fonce ou marine profond",
+        "white_alt": "Ivoire ou creme naturel",
         "palette_neutrals": ["#F0E6D2", "#8B7D6B", "#5C4033", "#3B3B2E", "#2D1B0E"],
         "palette_accents": ["#D35400", "#6B8E23", "#B7410E", "#795548", "#B8860B", "#008080"],
         "palette_avoid": ["#FF69B4", "#4169E1", "#C0C0C0", "#F8F8FF", "#800080", "#00BFFF"],
         "metals": "Or jaune, bronze, cuivre, laiton.",
         "makeup": {
-            "foundation": "Sous-ton dore equilibre. La peche et l'abricot sont vos bases.",
+            "foundation": "Sous-ton dore equilibre. Peche et abricot sont vos bases.",
             "lips": ["Rouille", "Brique", "Orange brulee", "Nude terreux"],
             "eyes": ["Bronze", "Olive", "Brun terreux", "Cuivre", "Kaki"],
             "blush": ["Terracotta", "Abricot fonce", "Peche brulee"],
-            "eyebrows": "Brun chaud moyen, auburn"
+            "eyebrows": "Brun chaud moyen, auburn",
+            "look_naturel": "Teint naturel dore + mascara brun + levres nude terreux + blush abricot",
+            "look_soiree": "Smoky bronze et olive + levres rouille + blush terracotta",
+            "look_pro": "Teint unifie + levres brique douce + yeux bronze discret",
         },
         "clothing": {
             "best_combinations": [
                 "Rouille + olive",
                 "Citrouille + brun",
                 "Teal + camel",
-                "Moutarde + bordeaux chaud"
+                "Moutarde + bordeaux chaud",
             ],
             "patterns": "Tartans, paisley, pied-de-poule, motifs automnaux",
+            "pattern_scale": "Moyens. L'equilibre est votre marque.",
             "contrast_tip": "Contraste moyen. Richesse naturelle sans extremes.",
-            "fabrics": "Laine, tweed, velours cotele, daim, cuir, flanelle"
+            "fabrics": "Laine, tweed, velours cotele, daim, cuir, flanelle",
+            "capsule": [
+                "Jean brut moyen",
+                "Pantalon olive",
+                "Chemise ivoire",
+                "Pull rouille",
+                "Veste brun chaud",
+                "Robe teal",
+                "T-shirt creme",
+            ],
+            "shopping_tip": "Vos couleurs sont celles d'un marche automnal : citrouilles, feuilles, epices, bois. Si ca sent l'automne, c'est pour vous.",
         },
         "hair": {
             "ideal": ["Chatain chaud", "Auburn moyen", "Brun chaud moyen", "Cuivre"],
-            "avoid": ["Noir", "Blond platine", "Cendre", "Gris"]
+            "avoid": ["Noir", "Blond platine", "Cendre", "Gris"],
+            "tips": "L'auburn naturel est votre couleur de reve. Les reflets cuivres et caramel illuminent le visage.",
         },
         "accessories": {
             "glasses": "Ecaille, bronze, tortoise, olive",
             "jewelry": "Or jaune, ambre, jaspe, cornaline, turquoise",
-            "bags_shoes": "Cognac, brun, camel, olive, rouille."
-        }
+            "bags_shoes": "Cognac, brun, camel, olive, rouille.",
+            "scarves": "Rouille, olive, moutarde, teal",
+            "nails": "Rouille, brun dore, terracotta, teal fonce",
+        },
+        "expert": {
+            "draping_confirm": ["Rouille pur", "Olive moyen", "Teal chaud"],
+            "draping_reject": ["Rose froid (desequilibre)", "Bleu roi (refroidit)", "Noir (casse)"],
+            "confused_with": "Warm Autumn (WA est plus dore, TA est plus equilibre). Soft Autumn (SA est plus mute). Deep Autumn (DA est plus sombre).",
+            "key_differentiator": "L'EQUILIBRE CHAUD. C'est l'automne 'classique' au centre de la famille. Ni trop clair, ni trop sombre, ni trop mute, ni trop vif.",
+            "coaching_notes": "C'est la saison automne la plus facile a habiller car la palette est large. Le piege : les couleurs froides 'a la mode' (gris, bleu glace, lavande) qui reviennent chaque saison.",
+            "common_mistakes": [
+                "Le noir reflexe",
+                "Suivre les tendances froides (gris, lavande)",
+                "Bijoux argentes par defaut",
+                "Fond de teint rose au lieu de dore",
+            ],
+            "skin_variations": "Peau medium a sous-ton dore equilibre. Se retrouve sur toutes les ethnicites a carnation chaude.",
+        },
     },
 
     # ================================================================
     # WINTER — Froid + Sombre
     # ================================================================
     "Deep Winter": {
+        "tagline": "L'intensite dramatique de la nuit",
         "description": (
-            "Intensite dramatique. Les couleurs les plus profondes et contrastees. "
-            "Noir, blanc pur, rouge vif, emeraude, bleu royal — puissance et contraste."
+            "Puissance et contraste. Les couleurs les plus profondes et intenses du spectre froid. "
+            "Noir, blanc pur, rouge vif, emeraude, bleu royal."
         ),
+        "icons": ["Priyanka Chopra", "Aishwarya Rai", "Monica Bellucci"],
+        "best_summary": "Noir, blanc pur, rouge vif, emeraude, bleu royal, violet profond",
+        "avoid_summary": "Beige, camel, pastels, orange, moutarde, or jaune",
+        "black_alt": "Le noir EST votre couleur. Portez-le sans moderation.",
+        "white_alt": "Blanc pur (pas ivoire, pas creme)",
         "palette_neutrals": ["#FFFFFF", "#C0C0C0", "#36454F", "#1C1C1C", "#000000"],
         "palette_accents": ["#CC0000", "#1A5276", "#0B6623", "#FF1493", "#6A0DAD", "#B22222"],
         "palette_avoid": ["#DDA15E", "#C2B280", "#F4A261", "#8B8C7A", "#D2B48C", "#FADADD"],
@@ -488,35 +937,72 @@ SEASON_ADVICE = {
             "lips": ["Rouge profond", "Bordeaux froid", "Prune intense", "Baie foncee"],
             "eyes": ["Noir charbon", "Bleu nuit", "Emeraude fonce", "Argent fonce", "Prune"],
             "blush": ["Rose profond", "Berry froid", "Prune"],
-            "eyebrows": "Brun fonce a noir, trait net et defini"
+            "eyebrows": "Brun fonce a noir, trait net et defini",
+            "look_naturel": "Teint impeccable + mascara noir intense + levres nude rose froid + blush rose profond",
+            "look_soiree": "Smoky noir intense + levres rouge profond + blush berry",
+            "look_pro": "Teint mat parfait + levres bordeaux + yeux charbon subtil",
         },
         "clothing": {
             "best_combinations": [
                 "Noir + rouge vif",
                 "Marine profond + blanc",
                 "Emeraude + argent",
-                "Aubergine + blanc"
+                "Aubergine + blanc pur",
             ],
-            "patterns": "Geometriques forts, color-block, rayures contrastees, uni",
-            "contrast_tip": "Contraste ELEVE. Vous etes fait(e) pour le noir et blanc. Les contrastes forts vous subliment.",
-            "fabrics": "Soie, satin, laine fine, cuir lisse, velours, coton sature"
+            "patterns": "Geometriques forts, color-block, rayures contrastees, uni sombre",
+            "pattern_scale": "Moyens a grands. Les contrastes forts et les aplats de couleur vous vont.",
+            "contrast_tip": "Contraste ELEVE. Le noir et blanc est votre signature. Les contrastes forts vous subliment.",
+            "fabrics": "Soie, satin, laine fine, cuir lisse, velours, coton sature",
+            "capsule": [
+                "Jean noir brut",
+                "Pantalon noir",
+                "Chemise blanche pure",
+                "Pull rouge vif",
+                "Blazer noir",
+                "Robe emeraude",
+                "T-shirt noir",
+            ],
+            "shopping_tip": "Pensez 'bijou sur ecrin noir'. Vos couleurs d'accent sont des eclats de couleur vive sur une base sombre. Le noir est votre meilleur ami.",
         },
         "hair": {
             "ideal": ["Noir profond", "Brun fonce froid", "Chatain fonce espresso"],
-            "avoid": ["Roux", "Dore", "Caramel", "Blond miel"]
+            "avoid": ["Roux", "Dore", "Caramel", "Blond miel"],
+            "tips": "Le noir profond est votre force. Les reflets froids (bleu, violet) ajoutent de la dimension sans rechauffer.",
         },
         "accessories": {
             "glasses": "Noir, argent, bleu marine, formes nettes",
             "jewelry": "Argent, platine, diamant, onyx, saphir, rubis, emeraude",
-            "bags_shoes": "Noir, marine, bordeaux froid. Le blanc est OK."
-        }
+            "bags_shoes": "Noir, marine, bordeaux froid. Le blanc est OK.",
+            "scarves": "Rouge vif, emeraude, violet, noir et blanc",
+            "nails": "Rouge profond, noir, bordeaux, emeraude fonce",
+        },
+        "expert": {
+            "draping_confirm": ["Rouge vif pur", "Blanc pur", "Noir intense"],
+            "draping_reject": ["Camel (ternit)", "Beige (affadit)", "Peche (desequilibre)"],
+            "confused_with": "Deep Autumn (verifier la temperature : DA est chaud, DW est froid). True Winter (TW est un peu plus clair). Cool Winter (CW est plus franchement froid, moins profond).",
+            "key_differentiator": "La PROFONDEUR est dominante. C'est l'hiver le plus sombre. Le contraste eleve peau-cheveux est souvent la premiere chose qu'on remarque.",
+            "coaching_notes": "Cette cliente porte naturellement le noir — c'est un confort. L'enjeu est d'introduire de la COULEUR vive en accent. Un foulard rouge vif, un pull emeraude, un rouge a levres profond. Sans couleur, la garde-robe devient monotone.",
+            "common_mistakes": [
+                "Tout-noir sans accent de couleur",
+                "Couleurs ternes ou terreuses",
+                "Pastels qui affadissent",
+                "Or jaune qui rechauffe (preferer argent)",
+            ],
+            "skin_variations": "Peau medium a tres foncee, souvent avec un contraste naturel eleve. Tres frequent chez les sud-asiatiques, les est-asiatiques, les afro-descendantes a sous-ton froid.",
+        },
     },
 
     "Cool Winter": {
+        "tagline": "L'eclat glacial du givre",
         "description": (
-            "Fraicheur glacee. Couleurs froides, vives et nettes. "
-            "Bleu glace, fuchsia, rouge cerise, vert pin — la clarte du givre."
+            "Purete glacee. Couleurs froides, vives et nettes. "
+            "Bleu glace, fuchsia, rouge cerise, vert pin."
         ),
+        "icons": ["Anne Hathaway", "Keira Knightley", "Liv Tyler"],
+        "best_summary": "Bleu glace, fuchsia, rouge cerise, vert pin, gris acier",
+        "avoid_summary": "Orange, moutarde, dore, camel, rouille, beige",
+        "black_alt": "Le noir vous va parfaitement.",
+        "white_alt": "Blanc pur glace",
         "palette_neutrals": ["#F8F8FF", "#B0B0BC", "#36454F", "#2B2D42", "#0D0D0D"],
         "palette_accents": ["#DC143C", "#4B0082", "#C71585", "#01796F", "#B0E0E6", "#191970"],
         "palette_avoid": ["#FF8C00", "#DAA520", "#8B4513", "#DDA15E", "#556B2F", "#F4A261"],
@@ -526,35 +1012,72 @@ SEASON_ADVICE = {
             "lips": ["Rouge cerise", "Fuchsia", "Rose vif froid", "Prune froide"],
             "eyes": ["Bleu glace", "Argent", "Gris charbon", "Violet froid", "Vert pin"],
             "blush": ["Rose vif froid", "Fuchsia doux", "Berry"],
-            "eyebrows": "Brun froid net, noir doux"
+            "eyebrows": "Brun froid net, noir doux",
+            "look_naturel": "Teint frais + mascara noir + levres rose vif froid + blush rose",
+            "look_soiree": "Smoky bleu nuit et argent + levres rouge cerise + blush berry",
+            "look_pro": "Teint impeccable froid + levres rose-brun froid + yeux gris charbon",
         },
         "clothing": {
             "best_combinations": [
                 "Noir + fuchsia",
                 "Marine + blanc glace",
                 "Gris charbon + rouge cerise",
-                "Vert pin + argent"
+                "Vert pin + argent",
             ],
             "patterns": "Geometriques nets, rayures contrastees, pied-de-poule, minimaliste",
+            "pattern_scale": "Moyens. Nettete et precision.",
             "contrast_tip": "Contraste eleve. Nettete et precision. Couleurs pures, pas de muted.",
-            "fabrics": "Soie froide, coton net, laine fine, cuir, satin, popeline"
+            "fabrics": "Soie froide, coton net, laine fine, cuir, satin, popeline",
+            "capsule": [
+                "Jean noir",
+                "Pantalon gris charbon",
+                "Chemise blanc glace",
+                "Pull fuchsia",
+                "Blazer marine",
+                "Robe vert pin",
+                "T-shirt gris acier",
+            ],
+            "shopping_tip": "Pensez 'givre' : vos couleurs sont nettes, pures, avec toujours une pointe de bleu ou de froid. Si une couleur semble 'chaude' ou 'terreuse', elle n'est pas pour vous.",
         },
         "hair": {
             "ideal": ["Noir bleu", "Brun fonce froid", "Chatain fonce cendre"],
-            "avoid": ["Roux", "Auburn", "Dore", "Caramel", "Blond chaud"]
+            "avoid": ["Roux", "Auburn", "Dore", "Caramel", "Blond chaud"],
+            "tips": "Le brun froid profond est votre signature. Les reflets froids (bleu, violet) sont parfaits.",
         },
         "accessories": {
             "glasses": "Noir, argent, bleu marine, transparents froids",
             "jewelry": "Argent, platine, diamant, saphir bleu, amethyste, tanzanite",
-            "bags_shoes": "Noir, marine, gris charbon, bordeaux froid."
-        }
+            "bags_shoes": "Noir, marine, gris charbon, bordeaux froid.",
+            "scarves": "Fuchsia, bleu glace, rouge cerise, gris argent",
+            "nails": "Rouge cerise, fuchsia, prune froide, gris bleu",
+        },
+        "expert": {
+            "draping_confirm": ["Rouge cerise", "Fuchsia", "Bleu glace"],
+            "draping_reject": ["Orange (catastrophe)", "Moutarde (jaunit)", "Camel (desequilibre)"],
+            "confused_with": "Cool Summer (CS est plus clair, CW est plus profond). True Winter (TW est plus equilibre). Deep Winter (DW est plus sombre, CW est plus froid).",
+            "key_differentiator": "Le FROID est dominant. C'est l'hiver le plus glacial. La temperature est la premiere chose a identifier.",
+            "coaching_notes": "Attention au piege du 'chic classique'. Beaucoup de vetements 'classiques' sont dans des tons chauds (camel, beige, cognac). Redirigez vers les equivalents froids : gris, marine, noir, blanc.",
+            "common_mistakes": [
+                "Camel/cognac par reflexe 'classique'",
+                "Or jaune au lieu d'argent",
+                "Fond de teint dore (toujours rose/froid)",
+                "Beige 'neutre' qui est en fait chaud",
+            ],
+            "skin_variations": "Peau claire a medium a sous-ton rose prononce. Frequent chez les est-europeennes, les est-asiatiques a sous-ton froid, les caucasiennes brunes a sous-ton rose.",
+        },
     },
 
     "Bright Winter": {
+        "tagline": "L'eclat electrique des cristaux de glace",
         "description": (
-            "Eclat glacial. Les couleurs les plus vives et pures sur fond froid. "
-            "Bleu electrique, fuchsia vif, jaune citron, vert emeraude — eclat maximal."
+            "Vivacite maximale sur fond froid. Les couleurs les plus pures et saturees. "
+            "Bleu electrique, fuchsia vif, jaune citron, vert emeraude."
         ),
+        "icons": ["Megan Fox", "Lucy Liu", "Courteney Cox"],
+        "best_summary": "Bleu electrique, fuchsia vif, jaune citron, emeraude, rouge pur",
+        "avoid_summary": "Couleurs ternes, beige, kaki, pastels fanes, gris terne",
+        "black_alt": "Le noir est parfait, surtout brillant ou verni.",
+        "white_alt": "Blanc optique eclatant",
         "palette_neutrals": ["#F8F8FF", "#B0B0B0", "#4A4A4A", "#1C1C1C", "#000000"],
         "palette_accents": ["#0066FF", "#FF1493", "#FFF700", "#8B00FF", "#FF0000", "#00CC44"],
         "palette_avoid": ["#C2B280", "#8B8C7A", "#A39BA8", "#CEB5A7", "#7F6B5D", "#B5838D"],
@@ -564,35 +1087,72 @@ SEASON_ADVICE = {
             "lips": ["Fuchsia vif", "Rouge pur", "Rose electrique", "Baie vive"],
             "eyes": ["Bleu electrique", "Violet vif", "Argent", "Vert emeraude", "Noir net"],
             "blush": ["Rose vif", "Fuchsia", "Berry eclatant"],
-            "eyebrows": "Brun fonce net, noir — trait precis"
+            "eyebrows": "Brun fonce net, noir — trait precis",
+            "look_naturel": "Teint lumineux + mascara noir + levres rose vif + blush rose eclatant",
+            "look_soiree": "Smoky violet et argent + levres rouge pur + blush fuchsia",
+            "look_pro": "Teint impeccable + levres fuchsia + liner noir precis",
         },
         "clothing": {
             "best_combinations": [
                 "Bleu electrique + blanc",
                 "Fuchsia + noir",
                 "Emeraude + argent",
-                "Jaune citron + marine"
+                "Jaune citron + marine",
             ],
             "patterns": "Color-block audacieux, geometrique, minimaliste, pop art",
+            "pattern_scale": "Tous formats. Vous portez l'audace.",
             "contrast_tip": "Contraste MAXIMAL. Couleurs pures et saturees, contrastes nets.",
-            "fabrics": "Soie brillante, cuir patent, vinyle, satin, materiaux a reflets, sequins"
+            "fabrics": "Soie brillante, cuir patent, vinyle, satin, materiaux a reflets, sequins",
+            "capsule": [
+                "Jean noir brut",
+                "Pantalon blanc",
+                "Top fuchsia vif",
+                "Blazer bleu electrique",
+                "Robe emeraude",
+                "T-shirt noir",
+                "Veste metallisee argent",
+            ],
+            "shopping_tip": "Si ca brille, si ca eclate, si ca en jette — c'est pour vous. Les couleurs 'safe' et ternes vous rendent invisible.",
         },
         "hair": {
             "ideal": ["Noir brillant", "Brun fonce froid", "Noir bleu"],
-            "avoid": ["Cendre terne", "Dore", "Roux", "Chatain moyen"]
+            "avoid": ["Cendre terne", "Dore", "Roux", "Chatain moyen"],
+            "tips": "Le noir brillant est votre force. Les reflets bleu-violet ajoutent de l'eclat sans rechauffer.",
         },
         "accessories": {
             "glasses": "Noir net, couleurs vives, formes geometriques",
-            "jewelry": "Argent brillant, diamant, cristal, pierres vives (saphir, emeraude, rubis)",
-            "bags_shoes": "Noir, couleurs vives pures, metallise. Le terne est interdit."
-        }
+            "jewelry": "Argent brillant, diamant, cristal, saphir, emeraude, rubis",
+            "bags_shoes": "Noir, couleurs vives pures, metallise. Le terne est interdit.",
+            "scarves": "Fuchsia, bleu electrique, emeraude, violet",
+            "nails": "Rouge pur, fuchsia, bleu electrique, noir verni",
+        },
+        "expert": {
+            "draping_confirm": ["Fuchsia vif", "Bleu electrique", "Blanc pur eclatant"],
+            "draping_reject": ["Kaki (eteint)", "Beige (invisible)", "Pastel (affadit)"],
+            "confused_with": "Bright Spring (verifier la temperature : BS est chaud, BW est froid). True Winter (TW est moins sature). Cool Winter (CW est plus glace, BW est plus eclatant).",
+            "key_differentiator": "La SATURATION est dominante. C'est l'hiver le plus vif. Couleur PURE et ECLAT sont les mots-cles.",
+            "coaching_notes": "Cette cliente est souvent timide avec la couleur car elle croit que 'c'est trop'. Montrez-lui que le fuchsia vif la fait rayonner alors que le beige la rend invisible. Le choc visuel est le meilleur argument.",
+            "common_mistakes": [
+                "Se refugier dans le beige/gris par 'securite'",
+                "Pastels fades (elle a besoin de SATURATON)",
+                "Maquillage nude trop discret",
+                "Confondre 'minimaliste' et 'terne'",
+            ],
+            "skin_variations": "Peau claire a foncee avec un contraste naturel eleve et une saturation forte. Frequent chez les est-asiatiques, les sud-asiatiques, les caucasiennes au teint de porcelaine avec cheveux noirs.",
+        },
     },
 
     "True Winter": {
+        "tagline": "La purete absolue du cristal",
         "description": (
-            "L'essence de l'hiver. Equilibre parfait entre froid, profondeur et nettete. "
-            "Rouge vrai, bleu pur, noir, blanc — clarte absolue."
+            "L'equilibre hivernal parfait. Froid, profond et net. "
+            "Rouge vrai, bleu pur, noir, blanc — clarte et purete absolues."
         ),
+        "icons": ["Lupita Nyong'o", "Zoe Saldana", "Audrey Tautou"],
+        "best_summary": "Rouge classique, bleu pur, noir, blanc, emeraude froid, fuchsia",
+        "avoid_summary": "Beige, camel, moutarde, orange, pastels chauds",
+        "black_alt": "Le noir est votre element. C'est votre neutre principal.",
+        "white_alt": "Blanc pur (jamais ivoire ou creme)",
         "palette_neutrals": ["#F5F5F5", "#C0C0C0", "#36454F", "#1C1C1C", "#000000"],
         "palette_accents": ["#CC0000", "#0000CD", "#00563F", "#FF69B4", "#301934", "#4169E1"],
         "palette_avoid": ["#DDA15E", "#C2B280", "#F4A261", "#8B8C7A", "#D2B48C", "#FFE5B4"],
@@ -602,38 +1162,76 @@ SEASON_ADVICE = {
             "lips": ["Rouge classique", "Rose vif froid", "Prune", "Berry"],
             "eyes": ["Gris charbon", "Bleu profond", "Argent", "Vert fonce froid", "Prune"],
             "blush": ["Rose froid vif", "Berry", "Prune douce"],
-            "eyebrows": "Brun fonce a noir, bien definis"
+            "eyebrows": "Brun fonce a noir, bien definis",
+            "look_naturel": "Teint impeccable + mascara noir + levres rose froid + blush rose",
+            "look_soiree": "Smoky noir et argent + levres rouge classique + blush berry",
+            "look_pro": "Teint mat parfait + levres prune + yeux charbon subtil",
         },
         "clothing": {
             "best_combinations": [
                 "Noir + blanc pur",
                 "Marine + rouge",
                 "Gris + fuchsia",
-                "Emeraude froid + noir"
+                "Emeraude froid + noir",
             ],
             "patterns": "Classiques nets, rayures, geometrique, monochrome",
-            "contrast_tip": "Contraste eleve. Purete et nettete, le noir et blanc est votre signature.",
-            "fabrics": "Laine fine, soie, coton net, cuir lisse, cachemire, gabardine"
+            "pattern_scale": "Moyens. L'elegance structuree est votre registre.",
+            "contrast_tip": "Contraste eleve. Le noir et blanc est votre signature intemporelle.",
+            "fabrics": "Laine fine, soie, coton net, cuir lisse, cachemire, gabardine",
+            "capsule": [
+                "Jean noir",
+                "Pantalon gris fonce",
+                "Chemise blanche pure",
+                "Pull rouge classique",
+                "Blazer noir",
+                "Robe marine",
+                "T-shirt blanc pur",
+            ],
+            "shopping_tip": "Le noir et blanc est votre base indemodable. Ajoutez des eclats de couleur vive (rouge, emeraude, fuchsia) pour eviter la monotonie. Chaque piece doit etre NETTE.",
         },
         "hair": {
             "ideal": ["Noir profond", "Brun fonce espresso", "Chatain fonce froid"],
-            "avoid": ["Roux", "Dore", "Caramel", "Cuivre"]
+            "avoid": ["Roux", "Dore", "Caramel", "Cuivre"],
+            "tips": "Le noir ou brun froid profond est votre force naturelle. Si vous colorez, restez dans les tons froids.",
         },
         "accessories": {
             "glasses": "Noir, argent, formes classiques nettes",
             "jewelry": "Argent, platine, diamant, perles blanches, onyx, saphir",
-            "bags_shoes": "Noir, marine, blanc, gris. Classique et impeccable."
-        }
+            "bags_shoes": "Noir, marine, blanc, gris. Classique et impeccable.",
+            "scarves": "Rouge, noir et blanc, emeraude, fuchsia",
+            "nails": "Rouge classique, noir, prune, argent",
+        },
+        "expert": {
+            "draping_confirm": ["Rouge pur", "Blanc pur", "Noir"],
+            "draping_reject": ["Camel (desequilibre)", "Orange (clash)", "Beige (affadit)"],
+            "confused_with": "Cool Winter (CW est plus franchement froid, TW est plus equilibre). Deep Winter (DW est plus sombre). True Summer (verifier la valeur : TS est plus clair).",
+            "key_differentiator": "L'EQUILIBRE FROID. C'est l'hiver 'classique' au centre de la famille. Le noir et blanc pur sont ses couleurs de base — c'est le test ultime.",
+            "coaching_notes": "C'est la saison la plus 'classique'. Le style intemporel (trench noir, chemise blanche, rouge a levres rouge) EST cette saison. Le risque est l'ennui — variez avec des accents de couleur vive.",
+            "common_mistakes": [
+                "Monotonie tout-noir sans couleur",
+                "Ivoire/creme au lieu de blanc pur",
+                "Couleurs chaudes 'tendance' (camel, rouille)",
+                "Bijoux or jaune par defaut",
+            ],
+            "skin_variations": "Toutes les carnations a sous-ton froid equilibre, du tres clair au tres fonce. C'est la saison la plus diversifiee en termes de teint. Le point commun : sous-ton froid et contraste naturel.",
+        },
     },
 }
 
 
-# Required keys for data integrity validation
+# Validation keys
 REQUIRED_ADVICE_KEYS = [
-    "description", "palette_neutrals", "palette_accents", "palette_avoid",
-    "metals", "makeup", "clothing", "hair", "accessories",
+    "tagline", "description", "icons", "best_summary", "avoid_summary",
+    "black_alt", "white_alt",
+    "palette_neutrals", "palette_accents", "palette_avoid",
+    "metals", "makeup", "clothing", "hair", "accessories", "expert",
 ]
-REQUIRED_MAKEUP_KEYS = ["foundation", "lips", "eyes", "blush", "eyebrows"]
-REQUIRED_CLOTHING_KEYS = ["best_combinations", "patterns", "contrast_tip", "fabrics"]
-REQUIRED_HAIR_KEYS = ["ideal", "avoid"]
-REQUIRED_ACCESSORIES_KEYS = ["glasses", "jewelry", "bags_shoes"]
+REQUIRED_MAKEUP_KEYS = ["foundation", "lips", "eyes", "blush", "eyebrows",
+                        "look_naturel", "look_soiree", "look_pro"]
+REQUIRED_CLOTHING_KEYS = ["best_combinations", "patterns", "pattern_scale",
+                          "contrast_tip", "fabrics", "capsule", "shopping_tip"]
+REQUIRED_HAIR_KEYS = ["ideal", "avoid", "tips"]
+REQUIRED_ACCESSORIES_KEYS = ["glasses", "jewelry", "bags_shoes", "scarves", "nails"]
+REQUIRED_EXPERT_KEYS = ["draping_confirm", "draping_reject", "confused_with",
+                        "key_differentiator", "coaching_notes", "common_mistakes",
+                        "skin_variations"]
