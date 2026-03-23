@@ -15,7 +15,10 @@ import cv2
 import numpy as np
 from skimage.color import rgb2lab
 from sklearn.cluster import KMeans
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+plt.rcParams["figure.dpi"] = 150
 import matplotlib.patches as mpatches
 from collections import OrderedDict
 
@@ -535,7 +538,7 @@ def render_categorized_palette(season_name, advice):
         ("Accents", advice.get("palette_accents", []), "#e07a5f"),
         ("A eviter", advice.get("palette_avoid", []), "#d62828"),
     ]
-    fig, axes = plt.subplots(3, 1, figsize=(10, 5.5))
+    fig, axes = plt.subplots(3, 1, figsize=(7, 4.5))
     for ax, (label, colors, title_color) in zip(axes, rows):
         if not colors:
             ax.axis("off")
@@ -549,9 +552,8 @@ def render_categorized_palette(season_name, advice):
                 linewidth=0.5,
             )
             ax.add_patch(rect)
-            ax.text(i * 1.15 + 0.525, -0.3, color, ha="center", va="top", fontsize=7, color="#666")
         ax.set_xlim(-0.3, max(len(colors), 1) * 1.15 + 0.2)
-        ax.set_ylim(-0.6, 1.5)
+        ax.set_ylim(-0.3, 1.5)
         ax.set_aspect("equal")
         ax.axis("off")
         ax.set_title(label, fontsize=12, fontweight="bold", color=title_color, loc="left")
@@ -607,7 +609,7 @@ def render_lab_histograms(lab_pixels, title="Distribution CIELab"):
 
 def render_gauge(value, vmin, vmax, label_left, label_right, title):
     """Horizontal gauge bar for profile dimensions. Mobile-friendly sizing."""
-    fig, ax = plt.subplots(figsize=(8, 1.2))
+    fig, ax = plt.subplots(figsize=(6, 1.0))
     normalized = (value - vmin) / (vmax - vmin)
     normalized = np.clip(normalized, 0, 1)
 
@@ -673,25 +675,21 @@ MOBILE_CSS = "<style>\n" \
     "  [data-testid='stCameraInput'] { width: 100% !important; }\n" \
     "  [data-testid='stMetric'] { padding: 0.25rem !important; }\n" \
     "}\n" \
-    "[data-testid='stCameraInput'] video { max-height: 40vh; object-fit: cover; }\n" \
+    "[data-testid='stCameraInput'] video { max-height: 50vh; object-fit: contain; }\n" \
     "</style>"
 
 
 def main():
     st.set_page_config(
-        page_title="PikoLab — Analyse Saisonniere",
-        layout="wide",
+        page_title="PikoLab — Analyse Colorimetrique",
+        page_icon="🎨",
+        layout="centered",
         initial_sidebar_state="collapsed",
     )
     st.markdown(MOBILE_CSS, unsafe_allow_html=True)
-    st.title("PikoLab PoC — Analyse Colorimetrique Saisonniere")
-    st.caption("Determination de la palette saisonniere (16 saisons) a partir d'une photo de visage")
 
-    # ---- Sidebar ----
-    st.sidebar.header("Configuration")
-    mode = st.sidebar.radio("Mode d'acquisition", ["Upload", "Webcam", "Demo"])
-
-    st.sidebar.header("Seuils de classification")
+    # ---- Sidebar: expert settings only ----
+    show_expert = st.sidebar.checkbox("Mode expert", value=False)
     with st.sidebar.expander("Parametres avances", expanded=False):
         temp_center = st.slider("Temperature neutre (b*)", 5.0, 30.0, DEFAULTS["temp_center"], 0.5)
         temp_scale = st.slider("Echelle temperature", 5.0, 25.0, DEFAULTS["temp_scale"], 0.5)
@@ -711,67 +709,64 @@ def main():
     # ---- Acquisition ----
     image_rgb = None
 
-    GUIDE_PHOTO = """
-**Comment prendre votre photo ?**
+    GUIDE_PHOTO = (
+        "**Comment prendre votre photo ?**\n\n"
+        "Pour de meilleurs resultats, tenez une **feuille A4 blanche** "
+        "a cote de votre visage. Elle sera detectee automatiquement.\n\n"
+        "1. Lumiere naturelle (fenetre, pas de soleil direct)\n"
+        "2. Pas de maquillage, pas de lunettes\n"
+        "3. Desactivez les filtres et le mode beaute\n"
+        "4. Visage de face, cheveux attaches\n"
+        "5. Feuille blanche bien eclairee, sans ombre\n\n"
+        "*La feuille est optionnelle mais recommandee.*"
+    )
 
-Pour de meilleurs resultats, tenez une **feuille A4 blanche** a cote de votre visage.
-Elle sera detectee automatiquement et servira a corriger les couleurs de l'eclairage.
+    # ---- Hero section when no image yet ----
+    if "analysis_done" not in st.session_state:
+        st.markdown("""
+        ## Decouvrez votre palette de couleurs
+        Prenez un selfie et obtenez instantanement votre **saison colorimetrique**
+        avec des conseils personnalises : maquillage, vetements, cheveux et accessoires.
+        """)
 
-**Preparation :**
-1. Prenez une feuille **A4 blanche classique** (papier imprimante, pas creme ni recycle)
-2. Placez-vous pres d'une **fenetre** avec de la lumiere naturelle (pas de soleil direct)
-3. Eteignez les lampes artificielles (plafonniers, lampes de bureau)
-4. Retirez vos **lunettes** et tout **maquillage**
-5. Desactivez les **filtres** et le **mode beaute** de votre telephone
+    # Mode selector in main content (not hidden in sidebar)
+    mode = st.radio(
+        "Comment fournir votre photo ?",
+        ["Appareil photo", "Galerie", "Demo"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
 
-**La photo :**
-- Tenez la feuille **a cote de votre visage**, visible dans le cadre
-- La feuille doit occuper **au moins 1/5 de l'image**
-- Evitez les ombres sur la feuille
-- Visage **de face**, regardez l'objectif
-- Cheveux attaches si possible
-- Fond neutre (evitez les murs colores)
-
-*La feuille est optionnelle mais fortement recommandee pour des resultats precis.*
-"""
-
-    if mode == "Upload":
-        with st.expander("Guide : comment prendre votre photo", expanded=False):
+    if mode == "Appareil photo":
+        first_visit = "guide_shown" not in st.session_state
+        with st.expander("Comment prendre une bonne photo", expanded=first_visit):
             st.markdown(GUIDE_PHOTO)
+            st.session_state["guide_shown"] = True
 
-        input_method = st.radio(
-            "Source de la photo",
-            ["Fichier (galerie)", "Appareil photo"],
-            horizontal=True,
-            key="upload_method",
+        camera_photo = st.camera_input("Prenez votre selfie")
+        if camera_photo:
+            image_rgb = load_image(camera_photo)
+
+    elif mode == "Galerie":
+        uploaded = st.file_uploader(
+            "Choisissez une photo",
+            type=["jpg", "jpeg", "png", "webp", "heic", "heif"],
         )
-        if input_method == "Fichier (galerie)":
-            uploaded = st.file_uploader(
-                "Votre photo (avec feuille blanche si possible)",
-                type=["jpg", "jpeg", "png", "webp", "heic", "heif"],
-            )
-            if uploaded:
-                image_rgb = load_image(uploaded)
-                if image_rgb is None:
-                    st.error(
-                        "Format d'image non reconnu. "
-                        "Si vous etes sur iPhone, allez dans Reglages > Appareil photo > Formats "
-                        "et selectionnez 'Le plus compatible' pour prendre des photos en JPEG."
-                    )
-        else:
-            st.caption("Tenez une feuille blanche A4 a cote de votre visage pour de meilleurs resultats.")
-            camera_photo = st.camera_input("Prenez votre photo")
-            if camera_photo:
-                image_rgb = load_image(camera_photo)
+        if uploaded:
+            image_rgb = load_image(uploaded)
+            if image_rgb is None:
+                st.error(
+                    "Format non reconnu. Sur iPhone, allez dans "
+                    "Reglages > Appareil photo > Formats > Le plus compatible."
+                )
 
-    elif mode == "Demo":
-        st.markdown("**Mode Demo** — Visage genere aleatoirement via IA")
+    else:  # Demo
         if st.button("Generer un visage aleatoire", type="primary", use_container_width=True):
             with st.spinner("Telechargement..."):
                 try:
                     req = urllib.request.Request(
                         "https://thispersondoesnotexist.com",
-                        headers={"User-Agent": "PikoLab-PoC/1.0"},
+                        headers={"User-Agent": "PikoLab/1.0"},
                     )
                     with urllib.request.urlopen(req, timeout=15) as resp:
                         data = resp.read()
@@ -784,152 +779,134 @@ Elle sera detectee automatiquement et servira a corriger les couleurs de l'eclai
         if "demo_image" in st.session_state:
             image_rgb = st.session_state["demo_image"]
 
-    else:  # Webcam mode
-        with st.expander("Guide : comment prendre votre photo", expanded=True):
-            st.markdown(GUIDE_PHOTO)
-
-        st.caption("Tenez une feuille blanche A4 a cote de votre visage pour de meilleurs resultats.")
-        face_photo = st.camera_input("Prenez votre photo")
-        if face_photo:
-            image_rgb = load_image(face_photo)
-
     if image_rgb is None:
-        st.info("Chargez une image ou prenez une photo pour commencer l'analyse.")
+        st.caption("Prenez un selfie ou choisissez une photo pour decouvrir votre palette.")
         return
 
-    # ---- Auto-detect white sheet in the image ----
+    # ---- Auto-detect white sheet ----
     wb_reference = detect_white_region(image_rgb)
     if wb_reference is not None:
-        st.success(
-            f"Photo recue ({image_rgb.shape[1]}x{image_rgb.shape[0]} px) — "
-            f"Feuille blanche detectee. Calibration couleur activee."
-        )
+        st.success("Feuille blanche detectee — calibration couleur activee.")
     else:
-        st.info(
-            f"Photo recue ({image_rgb.shape[1]}x{image_rgb.shape[0]} px) — "
-            f"Pas de feuille blanche detectee. Resultats approximatifs. "
-            f"Pour plus de precision, reprenez la photo avec une feuille A4 blanche visible."
-        )
+        st.caption("Pas de feuille blanche detectee — resultats approximatifs.")
 
-    # ---- Pipeline ----
-    with st.spinner("Detection du visage et extraction des couleurs..."):
-        landmarks = detect_face(image_rgb)
-        if landmarks is None:
-            st.error("Aucun visage detecte. Essayez avec une photo plus nette, de face, bien eclairee.")
-            return
+    # ---- Pipeline with progress ----
+    progress = st.progress(0, text="Detection du visage...")
+    landmarks = detect_face(image_rgb)
+    if landmarks is None:
+        progress.empty()
+        st.error("Aucun visage detecte. Essayez avec une photo plus nette, de face, bien eclairee.")
+        return
 
-        has_iris = len(landmarks) >= 478
-        skin_mask = create_skin_mask(image_rgb.shape, landmarks)
-        iris_mask = create_iris_mask(image_rgb.shape, landmarks) if has_iris else np.zeros(
-            image_rgb.shape[:2], dtype=np.uint8
-        )
-        skin_px = int(np.count_nonzero(skin_mask))
-        iris_px = int(np.count_nonzero(iris_mask))
+    progress.progress(20, text="Extraction des zones de peau et iris...")
+    has_iris = len(landmarks) >= 478
+    skin_mask = create_skin_mask(image_rgb.shape, landmarks)
+    iris_mask = create_iris_mask(image_rgb.shape, landmarks) if has_iris else np.zeros(
+        image_rgb.shape[:2], dtype=np.uint8
+    )
+    skin_px = int(np.count_nonzero(skin_mask))
+    iris_px = int(np.count_nonzero(iris_mask))
 
-        if skin_px < 100:
-            st.error("Trop peu de pixels de peau detectes.")
-            return
+    if skin_px < 100:
+        progress.empty()
+        st.error("Visage trop petit ou mal cadre. Rapprochez-vous de la camera.")
+        return
 
-        if wb_reference is not None:
-            corrected = correct_wb_with_reference(image_rgb, wb_reference)
-            correction_method = "Feuille blanche (white balance)"
-        else:
-            corrected = correct_exposure(image_rgb, skin_mask)
-            correction_method = "Exposition seule (approximatif)"
+    progress.progress(40, text="Correction des couleurs...")
+    if wb_reference is not None:
+        corrected = correct_wb_with_reference(image_rgb, wb_reference)
+        correction_method = "Feuille blanche"
+    else:
+        corrected = correct_exposure(image_rgb, skin_mask)
+        correction_method = "Auto"
 
-        skin_pixels_rgb = extract_pixels(corrected, skin_mask)
-        skin_lab = pixels_to_lab(skin_pixels_rgb)
-        skin_stats = compute_skin_stats(skin_lab)
+    progress.progress(60, text="Analyse colorimetrique...")
+    skin_pixels_rgb = extract_pixels(corrected, skin_mask)
+    skin_lab = pixels_to_lab(skin_pixels_rgb)
+    skin_stats = compute_skin_stats(skin_lab)
 
-        iris_pixels_rgb = extract_pixels(corrected, iris_mask)
-        iris_stats = extract_iris_dominant(iris_pixels_rgb) if len(iris_pixels_rgb) > 0 else None
+    iris_pixels_rgb = extract_pixels(corrected, iris_mask)
+    iris_stats = extract_iris_dominant(iris_pixels_rgb) if len(iris_pixels_rgb) > 0 else None
 
-        scores = compute_scores(skin_stats, iris_stats, params)
-        contrast = compute_contrast(skin_stats, iris_stats)
-        profile = compute_professional_profile(scores, contrast)
-        season = classify_season(scores, dominance_thresh)
-        top3 = classify_top3(scores)
-        confidence = compute_confidence(scores)
-        advice = SEASON_ADVICE.get(season, {})
+    progress.progress(80, text="Classification saisonniere...")
+    scores = compute_scores(skin_stats, iris_stats, params)
+    contrast = compute_contrast(skin_stats, iris_stats)
+    profile = compute_professional_profile(scores, contrast)
+    season = classify_season(scores, dominance_thresh)
+    top3 = classify_top3(scores)
+    confidence = compute_confidence(scores)
+    advice = SEASON_ADVICE.get(season, {})
 
-    # ---- Display: 5 tabs ----
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📸 Acquisition",
-        "📊 Profil colorimetrique",
-        "👔 Conseils",
-        "🎭 Detection",
-        "🔬 Debug",
-    ])
+    progress.progress(100, text="Analyse terminee !")
+    st.session_state["analysis_done"] = True
+    progress.empty()
 
-    # ---- TAB 1: Acquisition ----
-    with tab1:
-        col1, col2 = st.columns(2)
-        col1.image(image_rgb, caption="Image originale", use_container_width=True)
-        col2.image(corrected, caption=f"Apres correction ({correction_method})", use_container_width=True)
-        st.markdown(
-            f"**Dimensions** : {image_rgb.shape[1]}x{image_rgb.shape[0]} px — "
-            f"**Correction** : {correction_method}"
-        )
+    # ---- Season result card (styled HTML) ----
+    season_colors = SEASON_PALETTES.get(season, ["#E07A5F", "#F2CC8F"])
+    c1, c2 = season_colors[0], season_colors[1] if len(season_colors) > 1 else season_colors[0]
 
-    # ---- TAB 2: Profil colorimetrique (CLIENT) ----
-    with tab2:
-        st.markdown(f"## Votre saison : **{season}**")
-        if advice:
-            st.markdown(f"*{advice.get('description', '')}*")
-        st.markdown(f"Confiance : **{confidence:.0%}**")
+    if confidence >= 0.7:
+        conf_text = "Resultat fiable"
+    elif confidence >= 0.5:
+        conf_text = "Resultat indicatif"
+    else:
+        conf_text = "Resultat a confirmer — reprenez la photo en lumiere naturelle"
 
-        st.markdown("---")
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, {c1}22, {c2}22);
+        border-left: 4px solid {c1};
+        padding: 1.2rem 1.5rem;
+        border-radius: 0.75rem;
+        margin: 0.5rem 0 1rem 0;
+    ">
+        <p style="margin:0; color: #888; font-size: 0.9rem;">Votre saison</p>
+        <h1 style="margin: 0.15rem 0; color: {c1}; font-size: 2rem;">{season}</h1>
+        <p style="margin:0; color: #555; font-style: italic; font-size: 0.95rem;">
+            {advice.get('description', '')}
+        </p>
+        <p style="margin-top: 0.5rem; color: #888; font-size: 0.85rem;">{conf_text}</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-        # 4 gauge bars
+    # ---- Tabs ----
+    tab_labels = ["Profil", "Conseils", "Photo"]
+    if show_expert:
+        tab_labels += ["Detection", "Debug"]
+
+    tabs = st.tabs(tab_labels)
+
+    # ---- TAB: Profil ----
+    with tabs[0]:
         st.markdown("### Votre profil en 4 dimensions")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            fig = render_gauge(profile["raw_undertone"], -1, 1, "Froid", "Chaud",
-                               f"Sous-ton : {profile['undertone']}")
-            st.pyplot(fig)
-            plt.close(fig)
-
-            fig = render_gauge(profile["raw_chroma"], -1, 1, "Doux", "Vif",
-                               f"Chroma : {profile['chroma']}")
-            st.pyplot(fig)
-            plt.close(fig)
-
-        with col2:
-            fig = render_gauge(profile["raw_depth"], -1, 1, "Fonce", "Clair",
-                               f"Valeur : {profile['depth']}")
-            st.pyplot(fig)
-            plt.close(fig)
-
-            fig = render_gauge(profile["raw_contrast"], 0, 1, "Bas", "Eleve",
-                               f"Contraste : {profile['contrast']}")
+        for label, raw, vmin, vmax, left, right in [
+            (f"Sous-ton : {profile['undertone']}", profile["raw_undertone"], -1, 1, "Froid", "Chaud"),
+            (f"Valeur : {profile['depth']}", profile["raw_depth"], -1, 1, "Fonce", "Clair"),
+            (f"Chroma : {profile['chroma']}", profile["raw_chroma"], -1, 1, "Doux", "Vif"),
+            (f"Contraste : {profile['contrast']}", profile["raw_contrast"], 0, 1, "Bas", "Eleve"),
+        ]:
+            fig = render_gauge(raw, vmin, vmax, left, right, label)
             st.pyplot(fig)
             plt.close(fig)
 
         st.markdown("---")
-
-        # Top 3 seasons
         st.markdown("### Correspondance saisons")
         for i, entry in enumerate(top3):
-            icon = "🥇" if i == 0 else ("🥈" if i == 1 else "🥉")
-            bar_pct = entry["match_pct"]
-            st.markdown(f"{icon} **{entry['season']}** — {bar_pct:.1f}%")
-            st.progress(bar_pct / 100.0)
+            icon = ["🥇", "🥈", "🥉"][i]
+            st.markdown(f"{icon} **{entry['season']}** — {entry['match_pct']:.0f}%")
+            st.progress(entry["match_pct"] / 100.0)
 
-    # ---- TAB 3: Conseils (CLIENT) ----
-    with tab3:
+    # ---- TAB: Conseils ----
+    with tabs[1]:
         if not advice:
             st.warning(f"Pas de conseils disponibles pour {season}.")
         else:
-            st.markdown(f"## Conseils pour **{season}**")
-            st.markdown(f"*{advice.get('description', '')}*")
-
-            # Palette categorisee
+            # Palette
             st.markdown("### Palette")
             fig_pal = render_categorized_palette(season, advice)
             st.pyplot(fig_pal)
             plt.close(fig_pal)
-
             st.markdown(f"**Metaux** : {advice.get('metals', '')}")
 
             st.markdown("---")
@@ -937,20 +914,17 @@ Elle sera detectee automatiquement et servira a corriger les couleurs de l'eclai
             # Maquillage
             makeup = advice.get("makeup", {})
             st.markdown("### Maquillage")
-            col1, col2 = st.columns(2)
-            with col1:
-                st.markdown(f"**Fond de teint** : {makeup.get('foundation', '')}")
-                st.markdown(f"**Sourcils** : {makeup.get('eyebrows', '')}")
-                lips = makeup.get("lips", [])
-                if lips:
-                    st.markdown(f"**Levres** : {', '.join(lips)}")
-            with col2:
-                eyes = makeup.get("eyes", [])
-                if eyes:
-                    st.markdown(f"**Yeux** : {', '.join(eyes)}")
-                blush = makeup.get("blush", [])
-                if blush:
-                    st.markdown(f"**Blush** : {', '.join(blush)}")
+            st.markdown(f"**Fond de teint** : {makeup.get('foundation', '')}")
+            lips = makeup.get("lips", [])
+            if lips:
+                st.markdown(f"**Levres** : {', '.join(lips)}")
+            eyes = makeup.get("eyes", [])
+            if eyes:
+                st.markdown(f"**Yeux** : {', '.join(eyes)}")
+            blush = makeup.get("blush", [])
+            if blush:
+                st.markdown(f"**Blush** : {', '.join(blush)}")
+            st.markdown(f"**Sourcils** : {makeup.get('eyebrows', '')}")
 
             st.markdown("---")
 
@@ -959,31 +933,23 @@ Elle sera detectee automatiquement et servira a corriger les couleurs de l'eclai
             st.markdown("### Vetements")
             combos = clothing.get("best_combinations", [])
             if combos:
-                st.markdown("**Meilleures combinaisons :**")
                 for combo in combos:
                     st.markdown(f"- {combo}")
             st.markdown(f"**Motifs** : {clothing.get('patterns', '')}")
             st.markdown(f"**Tissus** : {clothing.get('fabrics', '')}")
-            st.info(f"💡 **Contraste** : {clothing.get('contrast_tip', '')}")
+            st.info(f"Contraste : {clothing.get('contrast_tip', '')}")
 
             st.markdown("---")
 
             # Cheveux
             hair = advice.get("hair", {})
             st.markdown("### Cheveux")
-            col1, col2 = st.columns(2)
-            with col1:
-                ideal = hair.get("ideal", [])
-                if ideal:
-                    st.markdown("**Couleurs ideales :**")
-                    for h in ideal:
-                        st.markdown(f"- ✅ {h}")
-            with col2:
-                avoid = hair.get("avoid", [])
-                if avoid:
-                    st.markdown("**A eviter :**")
-                    for h in avoid:
-                        st.markdown(f"- ❌ {h}")
+            ideal = hair.get("ideal", [])
+            avoid = hair.get("avoid", [])
+            for h in ideal:
+                st.markdown(f"- ✅ {h}")
+            for h in avoid:
+                st.markdown(f"- ❌ {h}")
 
             st.markdown("---")
 
@@ -994,66 +960,62 @@ Elle sera detectee automatiquement et servira a corriger les couleurs de l'eclai
             st.markdown(f"**Bijoux** : {acc.get('jewelry', '')}")
             st.markdown(f"**Sacs & chaussures** : {acc.get('bags_shoes', '')}")
 
-    # ---- TAB 4: Detection ----
-    with tab4:
-        overlay = render_face_overlay(corrected, skin_mask, iris_mask)
-        st.image(overlay, caption="Zones analysees (vert = peau, bleu = iris)", use_container_width=True)
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Pixels peau", f"{skin_px:,}")
-        col2.metric("Pixels iris", f"{iris_px:,}")
-        col3.metric("Landmarks", f"{len(landmarks)}")
-        if not has_iris:
-            st.warning("Landmarks iris non disponibles. Analyse basee uniquement sur la peau.")
+    # ---- TAB: Photo ----
+    with tabs[2]:
+        st.image(image_rgb, caption="Originale", use_container_width=True)
+        st.image(corrected, caption=f"Apres correction ({correction_method})", use_container_width=True)
 
-    # ---- TAB 5: Debug ----
-    with tab5:
-        st.subheader("Valeurs CIELab — Peau")
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("L* (luminosite)", f"{skin_stats['L']:.1f}")
-        col2.metric("a* (vert/rouge)", f"{skin_stats['a']:.1f}")
-        col3.metric("b* (bleu/jaune)", f"{skin_stats['b']:.1f}")
-        col4.metric("C* (chroma)", f"{skin_stats['C']:.1f}")
+    # ---- Expert tabs ----
+    if show_expert and len(tabs) > 3:
+        with tabs[3]:  # Detection
+            overlay = render_face_overlay(corrected, skin_mask, iris_mask)
+            st.image(overlay, caption="Zones analysees (vert = peau, bleu = iris)", use_container_width=True)
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Pixels peau", f"{skin_px:,}")
+            col2.metric("Pixels iris", f"{iris_px:,}")
+            col3.metric("Landmarks", f"{len(landmarks)}")
 
-        fig_hist = render_lab_histograms(skin_lab, "Distribution CIELab — Peau")
-        st.pyplot(fig_hist)
-        plt.close(fig_hist)
+        with tabs[4]:  # Debug
+            st.subheader("CIELab — Peau")
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("L*", f"{skin_stats['L']:.1f}")
+            col2.metric("a*", f"{skin_stats['a']:.1f}")
+            col3.metric("b*", f"{skin_stats['b']:.1f}")
+            col4.metric("C*", f"{skin_stats['C']:.1f}")
 
-        if iris_stats:
-            st.subheader("Couleur dominante — Iris")
-            col1, col2, col3, col4, col5 = st.columns(5)
-            col1.metric("L*", f"{iris_stats['L']:.1f}")
-            col2.metric("a*", f"{iris_stats['a']:.1f}")
-            col3.metric("b*", f"{iris_stats['b']:.1f}")
-            col4.metric("C*", f"{iris_stats['C']:.1f}")
-            iris_rgb = iris_stats["rgb"]
-            col5.color_picker(
-                "Couleur iris",
-                f"#{iris_rgb[0]:02x}{iris_rgb[1]:02x}{iris_rgb[2]:02x}",
-                disabled=True,
-            )
+            fig_hist = render_lab_histograms(skin_lab, "Distribution CIELab — Peau")
+            st.pyplot(fig_hist)
+            plt.close(fig_hist)
 
-        st.subheader("Radar des scores")
-        col1, col2 = st.columns([1, 1])
-        with col1:
+            if iris_stats:
+                st.subheader("Iris")
+                iris_rgb = iris_stats["rgb"]
+                st.markdown(
+                    f"L*={iris_stats['L']:.1f}, a*={iris_stats['a']:.1f}, "
+                    f"b*={iris_stats['b']:.1f}, C*={iris_stats['C']:.1f} — "
+                    f"RGB({iris_rgb[0]}, {iris_rgb[1]}, {iris_rgb[2]})"
+                )
+
+            st.subheader("Radar")
             fig_radar = render_radar_chart(scores, season)
             st.pyplot(fig_radar)
             plt.close(fig_radar)
-        with col2:
-            st.markdown("**Scores bruts**")
-            st.markdown(f"- Temperature : {scores['temperature']:+.3f}")
-            st.markdown(f"- Valeur : {scores['value']:+.3f}")
-            st.markdown(f"- Saturation : {scores['saturation']:+.3f}")
-            st.markdown(f"- Contraste : {contrast:.3f}")
-            st.markdown(f"**Seuil dominance** : {dominance_thresh}")
 
-        st.subheader("Distances aux 16 saisons")
-        point = np.array([scores["temperature"], scores["value"], scores["saturation"]])
-        all_distances = []
-        for name, centroid in SEASON_CENTROIDS.items():
-            dist = np.linalg.norm(point - np.array(centroid))
-            all_distances.append({"Saison": name, "Distance": round(dist, 3)})
-        all_distances.sort(key=lambda x: x["Distance"])
-        st.dataframe(all_distances, use_container_width=True, hide_index=True)
+            st.markdown(
+                f"Temperature: {scores['temperature']:+.3f} | "
+                f"Valeur: {scores['value']:+.3f} | "
+                f"Saturation: {scores['saturation']:+.3f} | "
+                f"Contraste: {contrast:.3f}"
+            )
+
+            st.subheader("Distances 16 saisons")
+            point = np.array([scores["temperature"], scores["value"], scores["saturation"]])
+            all_distances = []
+            for name, centroid in SEASON_CENTROIDS.items():
+                dist = np.linalg.norm(point - np.array(centroid))
+                all_distances.append({"Saison": name, "Distance": round(dist, 3)})
+            all_distances.sort(key=lambda x: x["Distance"])
+            st.dataframe(all_distances, use_container_width=True, hide_index=True)
 
 
 if __name__ == "__main__":
