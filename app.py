@@ -1772,6 +1772,10 @@ def main():
             )
         except Exception:
             pass  # Pillow font issue etc — graceful fallback
+
+        # CTA Coach IA
+        if st.button("💬 Parler a Iris, votre coach styliste", type="primary", use_container_width=True):
+            st.switch_page("pages/coach_ia.py")
     tab_idx += 1
 
     # ---- TAB: Essayage (virtual draping) ----
