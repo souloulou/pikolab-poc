@@ -895,6 +895,250 @@ def render_lab_histograms(lab_pixels, title="Distribution CIELab"):
     return fig
 
 
+# ============================================================
+# VIRTUAL DRAPING
+# ============================================================
+
+# Jawline landmarks (ear to ear via chin)
+JAWLINE_IDX = [234, 127, 162, 21, 54, 103, 67, 109, 10,
+               338, 297, 332, 284, 251, 389, 356, 454,
+               323, 361, 288, 397, 365, 379, 378, 400, 377,
+               152, 148, 176, 149, 150, 136, 172, 58, 132, 93]
+
+
+def render_drape(image_rgb, landmarks, color_hex):
+    """Render a color drape below the jawline, simulating a fabric swatch."""
+    h, w = image_rgb.shape[:2]
+    result = image_rgb.copy()
+
+    # Get jawline points
+    jaw_pts = [landmarks[i] for i in JAWLINE_IDX if i < len(landmarks)]
+    if len(jaw_pts) < 10:
+        return result
+
+    # Find chin (lowest point) and jaw sides
+    chin_y = max(p[1] for p in jaw_pts)
+    left_x = min(p[0] for p in jaw_pts)
+    right_x = max(p[0] for p in jaw_pts)
+
+    # Drape zone: from jawline down to bottom of image (or chin + 40% of face height)
+    face_top = min(p[1] for p in jaw_pts)
+    face_height = chin_y - face_top
+    drape_bottom = min(h, chin_y + int(face_height * 0.6))
+
+    # Create drape polygon: jawline bottom + rectangle extending down
+    drape_top_pts = [(p[0], p[1]) for p in jaw_pts if p[1] > chin_y - int(face_height * 0.25)]
+    if not drape_top_pts:
+        drape_top_pts = [(left_x, chin_y), (right_x, chin_y)]
+
+    # Sort by x for clean polygon
+    drape_top_pts.sort(key=lambda p: p[0])
+
+    # Build polygon: top contour + bottom rectangle
+    margin = int((right_x - left_x) * 0.15)
+    polygon = (
+        drape_top_pts
+        + [(right_x + margin, drape_bottom), (left_x - margin, drape_bottom)]
+    )
+    pts = np.array(polygon, dtype=np.int32)
+
+    # Parse hex color
+    color_rgb = tuple(int(color_hex.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+
+    # Draw filled drape with soft alpha blending
+    overlay = result.copy()
+    cv2.fillPoly(overlay, [pts], color_rgb)
+    cv2.addWeighted(overlay, 0.7, result, 0.3, 0, result)
+
+    return result
+
+
+def render_draping_grid(image_rgb, landmarks, good_colors, bad_colors):
+    """Render a 2-row grid: top=good colors, bottom=bad colors."""
+    cols = max(len(good_colors), len(bad_colors), 1)
+    cell_h, cell_w = image_rgb.shape[0], image_rgb.shape[1]
+
+    # Scale down for grid
+    scale = min(1.0, 400 / max(cell_h, cell_w))
+    thumb_h = int(cell_h * scale)
+    thumb_w = int(cell_w * scale)
+
+    # Resize source once
+    thumb = cv2.resize(image_rgb, (thumb_w, thumb_h), interpolation=cv2.INTER_AREA)
+    thumb_landmarks = [(int(x * scale), int(y * scale)) for x, y in landmarks]
+
+    rows = []
+    for colors, label in [(good_colors, "A porter"), (bad_colors, "A eviter")]:
+        row_images = []
+        for color_hex in colors[:3]:
+            draped = render_drape(thumb, thumb_landmarks, color_hex)
+            # Add color label at bottom
+            cv2.rectangle(draped, (0, thumb_h - 25), (thumb_w, thumb_h), (40, 40, 40), -1)
+            cv2.putText(draped, color_hex, (5, thumb_h - 7),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 255), 1)
+            row_images.append(draped)
+
+        # Pad if fewer than 3
+        while len(row_images) < 3:
+            row_images.append(np.full((thumb_h, thumb_w, 3), 240, dtype=np.uint8))
+
+        row = np.hstack(row_images)
+        # Add row label
+        label_bar = np.full((30, row.shape[1], 3), 255, dtype=np.uint8)
+        color_text = (0, 150, 0) if "porter" in label else (200, 0, 0)
+        cv2.putText(label_bar, label, (10, 22),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, color_text, 2)
+        rows.append(np.vstack([label_bar, row]))
+
+    return np.vstack(rows)
+
+
+# ============================================================
+# COLOR COMPATIBILITY SCORE
+# ============================================================
+
+def compute_color_compatibility(color_hex, season_palettes_all, season_name):
+    """Score a color against a season's palette. Returns (score 0-100, nearest match hex, suggestion)."""
+    # Parse input color
+    r, g, b = (int(color_hex.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+    input_lab = rgb2lab(np.array([[[r / 255, g / 255, b / 255]]], dtype=np.float64))[0, 0]
+
+    # Get season palette (neutrals + accents)
+    palette = season_palettes_all.get(season_name, [])
+    if not palette:
+        return 0, "#000000", "Palette non disponible"
+
+    # Compute distance to each palette color
+    best_dist = float("inf")
+    best_hex = palette[0]
+    for phex in palette:
+        pr, pg, pb = (int(phex.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+        p_lab = rgb2lab(np.array([[[pr / 255, pg / 255, pb / 255]]], dtype=np.float64))[0, 0]
+        dist = np.sqrt(np.sum((input_lab - p_lab) ** 2))
+        if dist < best_dist:
+            best_dist = dist
+            best_hex = phex
+
+    # Convert distance to score (0=far, 100=perfect match)
+    # Delta E < 5 = near identical, < 15 = good, < 30 = noticeable, > 30 = very different
+    score = max(0, min(100, int(100 - best_dist * 2.5)))
+
+    if score >= 75:
+        suggestion = "Excellente couleur pour vous !"
+    elif score >= 50:
+        suggestion = f"Acceptable. Pour un meilleur resultat, essayez {best_hex}"
+    elif score >= 25:
+        suggestion = f"Pas ideal. Preferez {best_hex} qui est dans votre palette."
+    else:
+        suggestion = f"A eviter. La couleur la plus proche dans votre palette est {best_hex}"
+
+    return score, best_hex, suggestion
+
+
+# ============================================================
+# STORY IMAGE EXPORT
+# ============================================================
+
+def generate_story_image(image_rgb, season, tagline, palette_colors, profile):
+    """Generate a 1080x1920 story image for sharing."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    W, H = 1080, 1920
+    story = Image.new("RGB", (W, H), "#FFFFFF")
+    draw = ImageDraw.Draw(story)
+
+    # Parse primary color
+    pc = palette_colors[0] if palette_colors else "#E07A5F"
+
+    # Background gradient strip at top
+    for y in range(300):
+        alpha = y / 300
+        r = int(int(pc[1:3], 16) * (1 - alpha) + 255 * alpha)
+        g = int(int(pc[3:5], 16) * (1 - alpha) + 255 * alpha)
+        b = int(int(pc[5:7], 16) * (1 - alpha) + 255 * alpha)
+        draw.line([(0, y), (W, y)], fill=(r, g, b))
+
+    # Photo (centered, circular crop)
+    photo = Image.fromarray(image_rgb)
+    size = 500
+    photo = photo.resize((size, size), Image.LANCZOS)
+
+    # Circular mask
+    mask = Image.new("L", (size, size), 0)
+    mask_draw = ImageDraw.Draw(mask)
+    mask_draw.ellipse([0, 0, size, size], fill=255)
+
+    # Paste photo centered
+    x_offset = (W - size) // 2
+    y_offset = 180
+    story.paste(photo, (x_offset, y_offset), mask)
+
+    # Circle border
+    draw.ellipse(
+        [x_offset - 3, y_offset - 3, x_offset + size + 3, y_offset + size + 3],
+        outline=pc, width=4,
+    )
+
+    # Season name
+    try:
+        font_big = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 64)
+        font_med = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 36)
+        font_sm = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 28)
+    except (OSError, IOError):
+        font_big = ImageFont.load_default()
+        font_med = font_big
+        font_sm = font_big
+
+    y_text = y_offset + size + 40
+    bbox = draw.textbbox((0, 0), season, font=font_big)
+    tw = bbox[2] - bbox[0]
+    draw.text(((W - tw) // 2, y_text), season, fill=pc, font=font_big)
+
+    # Tagline
+    y_text += 80
+    bbox = draw.textbbox((0, 0), tagline, font=font_med)
+    tw = bbox[2] - bbox[0]
+    draw.text(((W - tw) // 2, y_text), tagline, fill="#666666", font=font_med)
+
+    # Profile summary
+    y_text += 70
+    profile_text = (
+        f"Sous-ton: {profile['undertone']}  |  Valeur: {profile['depth']}  |  "
+        f"Chroma: {profile['chroma']}  |  Contraste: {profile['contrast']}"
+    )
+    bbox = draw.textbbox((0, 0), profile_text, font=font_sm)
+    tw = bbox[2] - bbox[0]
+    draw.text(((W - tw) // 2, y_text), profile_text, fill="#888888", font=font_sm)
+
+    # Palette swatches
+    y_palette = y_text + 80
+    swatch_size = 90
+    gap = 15
+    n = min(len(palette_colors), 8)
+    total_w = n * swatch_size + (n - 1) * gap
+    x_start = (W - total_w) // 2
+
+    draw.text((x_start, y_palette - 5), "Votre palette", fill="#333333", font=font_sm)
+    y_palette += 40
+
+    for i, hex_color in enumerate(palette_colors[:n]):
+        x = x_start + i * (swatch_size + gap)
+        draw.rounded_rectangle(
+            [x, y_palette, x + swatch_size, y_palette + swatch_size],
+            radius=10, fill=hex_color, outline="#CCCCCC",
+        )
+
+    # Footer
+    draw.text((W // 2 - 80, H - 80), "PikoLab", fill="#CCCCCC", font=font_med)
+
+    # Convert to bytes
+    import io
+    buf = io.BytesIO()
+    story.save(buf, format="PNG", quality=95)
+    buf.seek(0)
+    return buf.getvalue()
+
+
 def render_gauge(value, vmin, vmax, label_left, label_right, title):
     """Horizontal gauge bar for profile dimensions. Mobile-friendly sizing."""
     fig, ax = plt.subplots(figsize=(6, 1.0))
@@ -1269,11 +1513,11 @@ def main():
 
     # ---- Tabs by view mode ----
     if view_mode == "Client":
-        tab_labels = ["Profil", "Conseils", "Photo"]
+        tab_labels = ["Profil", "Essayage", "Conseils", "Photo"]
     elif view_mode == "Professionnel":
-        tab_labels = ["Profil", "Conseils", "Coaching", "Photo"]
+        tab_labels = ["Profil", "Essayage", "Conseils", "Coaching", "Photo"]
     else:  # Avance
-        tab_labels = ["Profil", "Conseils", "Coaching", "Detection", "Debug"]
+        tab_labels = ["Profil", "Essayage", "Conseils", "Coaching", "Detection", "Debug"]
 
     tabs = st.tabs(tab_labels)
     tab_idx = 0
@@ -1323,6 +1567,57 @@ def main():
             st.caption(f"Sourcils : {eyebrow_info['color']} — si differents des cheveux, c'est souvent un indice de votre couleur naturelle.")
         if lip_undertone != "inconnu":
             st.caption(f"Levres : pigmentation {lip_undertone}")
+
+        # Share button
+        st.markdown("---")
+        palette_for_story = SEASON_PALETTES.get(season, [])
+        try:
+            story_bytes = generate_story_image(
+                image_rgb, season, tagline, palette_for_story, profile,
+            )
+            st.download_button(
+                "Telecharger mon profil (image)",
+                data=story_bytes,
+                file_name=f"pikolab_{season.lower().replace(' ', '_')}.png",
+                mime="image/png",
+                use_container_width=True,
+            )
+        except Exception:
+            pass  # Pillow font issue etc — graceful fallback
+    tab_idx += 1
+
+    # ---- TAB: Essayage (virtual draping) ----
+    with tabs[tab_idx]:
+        st.markdown("### Essayage virtuel")
+        st.caption("Voyez sur votre propre visage quelles couleurs vous illuminent — et lesquelles vous ternissent.")
+
+        good_hex = advice.get("palette_accents", SEASON_PALETTES.get(season, []))[:3]
+        bad_hex = advice.get("palette_avoid", [])[:3]
+
+        if good_hex and bad_hex:
+            grid = render_draping_grid(image_rgb, landmarks, good_hex, bad_hex)
+            st.image(grid, use_container_width=True)
+        else:
+            st.info("Pas assez de couleurs pour generer la comparaison.")
+
+        # Free draping tool (all modes)
+        st.markdown("---")
+        st.markdown("### Testez une couleur")
+        test_color = st.color_picker("Choisissez une couleur a essayer", "#E07A5F", key="drape_picker")
+        draped = render_drape(image_rgb, landmarks, test_color)
+        st.image(draped, caption=f"Draping {test_color}", use_container_width=True)
+
+        # Compatibility score
+        combined_palette = list(SEASON_PALETTES.get(season, []))
+        combined_palette += advice.get("palette_neutrals", [])
+        score, nearest, suggestion = compute_color_compatibility(test_color, {season: combined_palette}, season)
+
+        if score >= 75:
+            st.success(f"**{score}% match** — {suggestion}")
+        elif score >= 50:
+            st.warning(f"**{score}% match** — {suggestion}")
+        else:
+            st.error(f"**{score}% match** — {suggestion}")
     tab_idx += 1
 
     # ---- TAB: Conseils ----
