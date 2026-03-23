@@ -166,3 +166,28 @@ else:
         </p>
     </div>
     """, unsafe_allow_html=True)
+
+# ---- Store scan results for Coach IA context ----
+scan_summary = " | ".join(
+    f"{hex_c} ({pct:.0f}%, {sc}% match)" for hex_c, pct, sc, _, _ in results
+)
+st.session_state["last_scan"] = {
+    "colors": [(hex_c, pct, sc, sug) for hex_c, pct, sc, _, sug in results],
+    "best_score": best_score,
+    "dominant_hex": dominant_hex,
+    "summary": scan_summary,
+}
+
+# ---- CTA: Ask Iris about this garment ----
+st.markdown("---")
+if best_score < 75:
+    ask_text = f"J'ai scanne un vetement avec la couleur dominante {dominant_hex} ({best_score}% match). Qu'est-ce que tu en penses et quelles alternatives tu me conseilles ?"
+else:
+    ask_text = f"J'ai scanne un vetement avec la couleur dominante {dominant_hex} ({best_score}% match). Comment je peux l'associer dans une tenue ?"
+
+if st.button("💬 Demander a Iris des conseils sur ce vetement", type="primary", use_container_width=True):
+    # Pre-fill coach with scan context
+    if "coach_messages" not in st.session_state:
+        st.session_state.coach_messages = []
+    st.session_state.coach_messages.append({"role": "user", "content": ask_text})
+    st.switch_page("pages/coach_ia.py")

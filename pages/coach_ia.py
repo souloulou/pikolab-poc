@@ -75,32 +75,9 @@ system_prompt = build_coach_system_prompt(
     quiz_data,
 )
 
-# ---- Media inputs (photo + audio) ----
-col_photo, col_audio = st.columns(2)
-with col_photo:
-    photo_upload = st.file_uploader(
-        "Photo",
-        type=["jpg", "jpeg", "png", "webp"],
-        key="coach_photo",
-        label_visibility="collapsed",
-    )
-with col_audio:
-    audio_input = st.audio_input("Parlez a Iris", key="coach_audio", label_visibility="collapsed")
-
-if photo_upload:
-    st.image(photo_upload, caption="Photo envoyee", width=250)
-
 # ---- Chat ----
 if "coach_messages" not in st.session_state:
     st.session_state.coach_messages = []
-
-# Handle voice input: send audio to Gemini when recorded
-if audio_input and "last_audio_id" not in st.session_state:
-    st.session_state["last_audio_id"] = id(audio_input)
-    st.session_state["pending_audio"] = audio_input.getvalue()
-elif audio_input and st.session_state.get("last_audio_id") != id(audio_input):
-    st.session_state["last_audio_id"] = id(audio_input)
-    st.session_state["pending_audio"] = audio_input.getvalue()
 
 for msg in st.session_state.coach_messages:
     with st.chat_message(msg["role"]):
@@ -108,9 +85,26 @@ for msg in st.session_state.coach_messages:
             st.image(msg["image"], width=200)
         st.markdown(msg["content"])
 
-# Determine input: text prompt OR pending audio
-prompt = st.chat_input("Ecrivez ou utilisez le micro ci-dessus")
-pending_audio = st.session_state.pop("pending_audio", None)
+# Chat input (always visible, pinned to bottom by Streamlit)
+prompt = st.chat_input("Ecrivez votre question ici...")
+
+# Media inputs below chat (less intrusive)
+col_photo, col_audio = st.columns(2)
+with col_photo:
+    photo_upload = st.file_uploader(
+        "Joindre une photo",
+        type=["jpg", "jpeg", "png", "webp"],
+        key="coach_photo",
+    )
+with col_audio:
+    audio_input = st.audio_input("Message vocal", key="coach_audio")
+
+# Handle pending audio
+if audio_input and st.session_state.get("_last_audio_id") != id(audio_input):
+    st.session_state["_last_audio_id"] = id(audio_input)
+    st.session_state["_pending_audio"] = audio_input.getvalue()
+
+pending_audio = st.session_state.pop("_pending_audio", None)
 
 if prompt or pending_audio:
     has_photo = photo_upload is not None

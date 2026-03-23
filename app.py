@@ -1268,6 +1268,18 @@ def _draw_centered(draw, text, y, width, font, fill):
 # COACH IA (Gemini)
 # ============================================================
 
+def _format_scan_context():
+    """Include last scan results in coach context if available."""
+    scan = st.session_state.get("last_scan") if st else None
+    if not scan:
+        return ""
+    lines = ["\nDERNIER SCAN VETEMENT :"]
+    for hex_c, pct, score, sug in scan.get("colors", []):
+        lines.append(f"- Couleur {hex_c} ({pct:.0f}% du vetement) : {score}% match — {sug}")
+    lines.append(f"Score global : {scan.get('best_score', 0)}%")
+    return "\n".join(lines)
+
+
 def build_coach_system_prompt(season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data):
     """Build a comprehensive system prompt with all client context."""
     diag_text = "\n".join(
@@ -1387,6 +1399,7 @@ ACCESSOIRES :
 - Ongles : {acc.get('nails', '')}
 - Foulards : {acc.get('scarves', '')}
 - Sacs/chaussures : {acc.get('bags_shoes', '')}
+{_format_scan_context()}
 """
 
 
