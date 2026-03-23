@@ -171,6 +171,51 @@ def detect_face(image_rgb):
     return [(int(lm.x * w), int(lm.y * h)) for lm in result.face_landmarks[0]]
 
 
+def validate_face(landmarks, image_shape):
+    """Validate face quality. Returns (ok, error_message)."""
+    h, w = image_shape[:2]
+    if not landmarks:
+        return False, "Aucun visage detecte."
+
+    # --- Face size: bounding box must be >12% of image area ---
+    xs = [p[0] for p in landmarks]
+    ys = [p[1] for p in landmarks]
+    face_w = max(xs) - min(xs)
+    face_h = max(ys) - min(ys)
+    face_area = face_w * face_h
+    img_area = h * w
+    if face_area < img_area * 0.12:
+        return False, "Visage trop petit. Rapprochez-vous de la camera ou recadrez la photo."
+
+    # --- Frontal check: left eye and right eye should be roughly symmetric ---
+    # Landmark 33 = left eye outer, 263 = right eye outer
+    # Landmark 1 = nose tip
+    if len(landmarks) > 263:
+        left_eye = landmarks[33]
+        right_eye = landmarks[263]
+        nose = landmarks[1]
+
+        # Distance from nose to each eye
+        dist_left = abs(nose[0] - left_eye[0])
+        dist_right = abs(nose[0] - right_eye[0])
+
+        if min(dist_left, dist_right) > 0:
+            symmetry = max(dist_left, dist_right) / min(dist_left, dist_right)
+            if symmetry > 2.5:
+                return False, "Visage trop de profil. Regardez la camera de face."
+
+    # --- Eyes open check (for iris detection quality) ---
+    if len(landmarks) >= 478:
+        # Left eye: top lid ~159, bottom lid ~145, should have vertical distance
+        top_lid = landmarks[159]
+        bot_lid = landmarks[145]
+        eye_opening = abs(top_lid[1] - bot_lid[1])
+        if eye_opening < face_h * 0.02:
+            return False, "Vos yeux semblent fermes. Ouvrez les yeux et reprenez la photo."
+
+    return True, ""
+
+
 # ============================================================
 # MASK CREATION
 # ============================================================
@@ -1593,7 +1638,13 @@ def main():
     landmarks = detect_face(image_rgb)
     if landmarks is None:
         progress.empty()
-        st.error("Aucun visage detecte. Essayez avec une photo plus nette, de face, bien eclairee.")
+        st.error("Aucun visage humain detecte. Assurez-vous que la photo montre clairement un visage.")
+        return
+
+    face_ok, face_error = validate_face(landmarks, image_rgb.shape)
+    if not face_ok:
+        progress.empty()
+        st.error(face_error)
         return
 
     progress.progress(15, text="Extraction des zones de peau et iris...")
