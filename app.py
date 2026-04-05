@@ -1805,7 +1805,7 @@ def main():
     if mode == "Appareil photo":
         st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 pliée en 2 à côté du visage" if use_sheet else ""))
 
-        # ---- Script de capture automatique (iframe via components.html) ----
+        # ---- Script de capture automatique + overlay canvas ----
         _sheet_js = "true" if use_sheet else "false"
         components.html("""
 <style>
@@ -1827,41 +1827,34 @@ def main():
 <script>
 (function() {
   const pwin = window.parent;
+  const pdoc = pwin.document;
   if (pwin._pikolabRunning) return;
   pwin._pikolabRunning = true;
 
-  const STABLE_NEEDED  = 20;  // 6s à 300ms/frame
+  const STABLE_NEEDED  = 10;   // 3s de décompte à 300ms/frame
   const SKIN_THRESHOLD = 0.07;
   const SHEET_REQUIRED = SHEET_REQUIRED_PLACEHOLDER;
   let stableCount = 0, captured = false;
+  let overlayCanvas = null, overlayCtx = null;
 
+  // ---- Détection ----
   function isSkin(r, g, b) {
     return r>60&&r<250&&g>35&&g<220&&b>15&&b<195&&r>g&&r>b&&(r-Math.min(g,b))>10;
   }
 
-  // Détection par zones : cherche une région avec >15% de pixels blancs/neutres
   function detectSheet(px, w, h) {
     const zones = [
-      [0,     0,   w/2, h/2],
-      [w/2,   0,   w,   h/2],
-      [0,   h/2,   w/2, h  ],
-      [w/2, h/2,   w,   h  ],
-      [0,     0,   w/3, h  ],
-      [2*w/3, 0,   w,   h  ],
-      [0,     0,   w,   h/3],
+      [0,0,w/2,h/2],[w/2,0,w,h/2],[0,h/2,w/2,h],[w/2,h/2,w,h],
+      [0,0,w/3,h],[2*w/3,0,w,h],[0,0,w,h/3],
     ];
-    const step = 4;
     for (const [x1,y1,x2,y2] of zones) {
       let white=0, total=0;
-      for (let y=y1; y<y2; y+=step) {
-        for (let x=x1; x<x2; x+=step) {
-          const i = ((y|0)*w+(x|0))*4;
-          const r=px[i], g=px[i+1], b=px[i+2];
-          total++;
-          if ((r+g+b)/3 > 165 && Math.max(r,g,b)-Math.min(r,g,b) < 60) white++;
-        }
+      for (let y=y1; y<y2; y+=4) for (let x=x1; x<x2; x+=4) {
+        const i=((y|0)*w+(x|0))*4;
+        total++;
+        if ((px[i]+px[i+1]+px[i+2])/3>165 && Math.max(px[i],px[i+1],px[i+2])-Math.min(px[i],px[i+1],px[i+2])<60) white++;
       }
-      if (total>0 && white/total > 0.15) return true;
+      if (total>0 && white/total>0.15) return true;
     }
     return false;
   }
@@ -1870,74 +1863,164 @@ def main():
     const x1=Math.floor(w*.22), x2=Math.floor(w*.78);
     const y1=Math.floor(h*.10), y2=Math.floor(h*.90);
     let skin=0, total=0;
-    const step=5;
-    for (let y=y1; y<y2; y+=step)
-      for (let x=x1; x<x2; x+=step) {
-        const i=(y*w+x)*4; total++;
-        if (isSkin(px[i],px[i+1],px[i+2])) skin++;
-      }
-    return total>0 && skin/total >= SKIN_THRESHOLD;
+    for (let y=y1; y<y2; y+=5) for (let x=x1; x<x2; x+=5) {
+      const i=(y*w+x)*4; total++;
+      if (isSkin(px[i],px[i+1],px[i+2])) skin++;
+    }
+    return total>0 && skin/total>=SKIN_THRESHOLD;
   }
 
-  function updateStatus(faceOk, sheetOk) {
-    const bar=document.getElementById('bar');
-    if (!bar) return;
+  // ---- Overlay canvas (injecté dans le DOM parent) ----
+  function ensureOverlay() {
+    if (pdoc.getElementById('pikolab-overlay')) return;
+    overlayCanvas = pdoc.createElement('canvas');
+    overlayCanvas.id = 'pikolab-overlay';
+    overlayCanvas.style.cssText = 'position:fixed;pointer-events:none;z-index:99999;';
+    pdoc.body.appendChild(overlayCanvas);
+    overlayCtx = overlayCanvas.getContext('2d');
+  }
+
+  function syncOverlay(video) {
+    if (!overlayCanvas) return;
+    const r = video.getBoundingClientRect();
+    const W = r.width|0, H = r.height|0;
+    overlayCanvas.style.top  = r.top  + pwin.scrollY + 'px';
+    overlayCanvas.style.left = r.left + pwin.scrollX + 'px';
+    overlayCanvas.style.width  = W + 'px';
+    overlayCanvas.style.height = H + 'px';
+    if (overlayCanvas.width !== W || overlayCanvas.height !== H) {
+      overlayCanvas.width = W; overlayCanvas.height = H;
+    }
+  }
+
+  function drawOverlay(faceOk, sheetOk) {
+    if (!overlayCtx) return;
+    const W = overlayCanvas.width, H = overlayCanvas.height;
+    if (!W || !H) return;
+    overlayCtx.clearRect(0, 0, W, H);
+
+    const ready = faceOk && (!SHEET_REQUIRED || sheetOk);
+    const secsLeft = ready ? Math.ceil((STABLE_NEEDED - stableCount) * 0.3) : 0;
+
+    // --- Ovale visage ---
+    const fc = faceOk ? '#4ade80' : '#f87171';
+    overlayCtx.save();
+    overlayCtx.strokeStyle = fc;
+    overlayCtx.lineWidth = 3;
+    overlayCtx.setLineDash(faceOk ? [] : [10, 5]);
+    overlayCtx.beginPath();
+    overlayCtx.ellipse(W*0.5, H*0.44, W*0.22, H*0.37, 0, 0, Math.PI*2);
+    overlayCtx.stroke();
+    overlayCtx.restore();
+    // label visage
+    overlayCtx.save();
+    overlayCtx.fillStyle = fc;
+    overlayCtx.font = 'bold ' + Math.max(12, (H*0.045)|0) + 'px sans-serif';
+    overlayCtx.textAlign = 'center';
+    overlayCtx.shadowColor = '#000'; overlayCtx.shadowBlur = 4;
+    overlayCtx.fillText(faceOk ? '✓ Visage centré' : 'Centrez votre visage ici', W*0.5, H*0.87);
+    overlayCtx.restore();
+
+    // --- Rectangle feuille (côté droit) ---
+    if (SHEET_REQUIRED) {
+      const sc = sheetOk ? '#4ade80' : '#fbbf24';
+      overlayCtx.save();
+      overlayCtx.strokeStyle = sc;
+      overlayCtx.lineWidth = 3;
+      overlayCtx.setLineDash(sheetOk ? [] : [10, 5]);
+      overlayCtx.strokeRect(W*0.65, H*0.18, W*0.30, H*0.54);
+      overlayCtx.restore();
+      // icône feuille
+      overlayCtx.save();
+      overlayCtx.fillStyle = sc;
+      overlayCtx.font = 'bold ' + Math.max(11, (H*0.040)|0) + 'px sans-serif';
+      overlayCtx.textAlign = 'center';
+      overlayCtx.shadowColor = '#000'; overlayCtx.shadowBlur = 4;
+      overlayCtx.fillText(sheetOk ? '✓ Feuille' : 'Feuille A4\npliée en 2', W*0.80, H*0.79);
+      overlayCtx.restore();
+    }
+
+    // --- Décompte ---
+    if (ready && secsLeft > 0) {
+      overlayCtx.save();
+      overlayCtx.fillStyle = 'rgba(0,0,0,0.38)';
+      overlayCtx.fillRect(0, 0, W, H);
+      overlayCtx.font = 'bold ' + ((H*0.38)|0) + 'px sans-serif';
+      overlayCtx.fillStyle = '#fff';
+      overlayCtx.textAlign = 'center';
+      overlayCtx.textBaseline = 'middle';
+      overlayCtx.shadowColor = '#000'; overlayCtx.shadowBlur = 12;
+      overlayCtx.fillText(secsLeft, W*0.5, H*0.5);
+      overlayCtx.restore();
+    }
+  }
+
+  function removeOverlay() {
+    const el = pdoc.getElementById('pikolab-overlay');
+    if (el) el.remove();
+    overlayCanvas = null; overlayCtx = null;
+  }
+
+  // ---- Barre de statut ----
+  function updateBar(faceOk, sheetOk) {
+    const bar = document.getElementById('bar'); if (!bar) return;
     document.getElementById('fs').textContent = faceOk ? '✅ Visage' : '❌ Centrez votre visage';
     const ssEl = document.getElementById('ss');
-    if (SHEET_REQUIRED) {
-      ssEl.textContent = sheetOk ? '✅ Feuille détectée' : '⬜ En attente de la feuille…';
-    } else {
-      ssEl.textContent = '';
-    }
+    ssEl.textContent = SHEET_REQUIRED ? (sheetOk ? '✅ Feuille' : '⬜ Feuille manquante') : '';
     const cd = document.getElementById('cd');
-    const readyToCapture = faceOk && (!SHEET_REQUIRED || sheetOk);
-    if (readyToCapture) {
-      stableCount++;
-      const s = Math.ceil((STABLE_NEEDED-stableCount)*.3);
-      cd.textContent = s>0 ? '📸 '+s+'s' : '📸';
+    const ready = faceOk && (!SHEET_REQUIRED || sheetOk);
+    if (ready) {
+      const s = Math.ceil((STABLE_NEEDED - stableCount) * 0.3);
+      cd.textContent = s > 0 ? '📸 ' + s + 's' : '📸';
       bar.style.cssText += 'background:#14532d;border:2px solid #4ade80;';
-    } else if (faceOk && SHEET_REQUIRED && !sheetOk) {
-      stableCount=0; cd.textContent='';
-      bar.style.cssText += 'background:#78350f;border:2px solid #fbbf24;';
+    } else if (faceOk && SHEET_REQUIRED) {
+      cd.textContent = ''; bar.style.cssText += 'background:#78350f;border:2px solid #fbbf24;';
     } else {
-      stableCount=0; cd.textContent='';
-      bar.style.cssText += 'background:#1c1917;border:2px solid #f87171;';
+      cd.textContent = ''; bar.style.cssText += 'background:#1c1917;border:2px solid #f87171;';
     }
   }
 
   function tryCapture() {
-    const pdoc = pwin.document;
+    removeOverlay();
     const btn = pdoc.querySelector('[data-testid="stCameraInputTakePhoto"]')
              || pdoc.querySelector('[data-testid="stCameraInput"] button');
     if (btn) btn.click();
   }
 
   function startLoop(video) {
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d', {willReadFrequently:true});
+    const offscreen = document.createElement('canvas');
+    const octx = offscreen.getContext('2d', {willReadFrequently:true});
+    ensureOverlay();
+
     setInterval(() => {
-      if (captured || !video || video.readyState<2) return;
-      canvas.width  = video.videoWidth  || 640;
-      canvas.height = video.videoHeight || 480;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const faceOk  = detectFace(data, canvas.width, canvas.height);
-      const sheetOk = detectSheet(data, canvas.width, canvas.height);
-      updateStatus(faceOk, sheetOk);
-      const readyToCapture = faceOk && (!SHEET_REQUIRED || sheetOk);
-      if (readyToCapture && stableCount >= STABLE_NEEDED) {
-        captured=true; pwin._pikolabRunning=false; tryCapture();
+      if (captured || !video || video.readyState < 2) return;
+      offscreen.width  = video.videoWidth  || 640;
+      offscreen.height = video.videoHeight || 480;
+      octx.drawImage(video, 0, 0, offscreen.width, offscreen.height);
+      const {data} = octx.getImageData(0, 0, offscreen.width, offscreen.height);
+
+      const faceOk  = detectFace(data, offscreen.width, offscreen.height);
+      const sheetOk = detectSheet(data, offscreen.width, offscreen.height);
+      const ready   = faceOk && (!SHEET_REQUIRED || sheetOk);
+
+      if (ready) stableCount++; else stableCount = 0;
+
+      syncOverlay(video);
+      drawOverlay(faceOk, sheetOk);
+      updateBar(faceOk, sheetOk);
+
+      if (ready && stableCount >= STABLE_NEEDED) {
+        captured = true; pwin._pikolabRunning = false; tryCapture();
       }
     }, 300);
   }
 
   function waitForVideo() {
-    const pdoc = pwin.document;
     const v = pdoc.querySelector('[data-testid="stCameraInput"] video');
     if (v) { startLoop(v); return; }
     const obs = new pwin.MutationObserver(() => {
       const v2 = pdoc.querySelector('[data-testid="stCameraInput"] video');
-      if (v2) { obs.disconnect(); setTimeout(()=>startLoop(v2), 800); }
+      if (v2) { obs.disconnect(); setTimeout(() => startLoop(v2), 800); }
     });
     obs.observe(pdoc.body, {childList:true, subtree:true});
   }
