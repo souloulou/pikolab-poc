@@ -2101,13 +2101,9 @@ def main():
                 consensus_data = run_consensus_analysis(
                     corrected, season, confidence, gemini_api_key
                 )
-                if consensus_data["overridden"]:
-                    season = consensus_data["consensus_season"]
-                    advice = SEASON_ADVICE.get(season, {})
-                    diagnostic = generate_personal_diagnostic(
-                        skin_stats, iris_stats, hair_info, lip_undertone,
-                        profile, season, advice, contrast,
-                    )
+                # Ne pas overrider la saison : cela créerait une incohérence
+                # entre les jauges (basées sur les pixels) et la saison affichée.
+                # Le consensus s'affiche en bloc informatif séparé.
             except Exception as exc:
                 st.warning(f"Validation multi-agents non disponible : {exc}")
 
