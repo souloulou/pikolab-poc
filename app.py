@@ -1770,7 +1770,7 @@ def main():
     # ---- Questions pré-capture (tous modes sauf Demo) ----
     if mode != "Demo":
         st.markdown("**Avant la photo :**")
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         with col1:
             st.checkbox(
                 "Maquillage",
@@ -1792,11 +1792,21 @@ def main():
                 value=False,
                 help="Dégager le visage et le cou améliore la précision de l'analyse",
             )
+        with col4:
+            st.checkbox(
+                "Feuille blanche",
+                key="chk_use_sheet",
+                value=False,
+                help="Feuille A4 pliée en 2, tenue à plat à côté du visage — améliore la précision du sous-ton",
+            )
+
+    use_sheet = st.session_state.get("chk_use_sheet", False)
 
     if mode == "Appareil photo":
-        st.caption("Lumiere naturelle · Visage de face · Feuille A4 blanche pliée en 2 à côté du visage")
+        st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 pliée en 2 à côté du visage" if use_sheet else ""))
 
         # ---- Script de capture automatique (iframe via components.html) ----
+        _sheet_js = "true" if use_sheet else "false"
         components.html("""
 <style>
   body { margin:0; padding:0; background:transparent; overflow:hidden; }
@@ -1822,6 +1832,7 @@ def main():
 
   const STABLE_NEEDED  = 20;  // 6s à 300ms/frame
   const SKIN_THRESHOLD = 0.07;
+  const SHEET_REQUIRED = SHEET_REQUIRED_PLACEHOLDER;
   let stableCount = 0, captured = false;
 
   function isSkin(r, g, b) {
@@ -1871,15 +1882,21 @@ def main():
   function updateStatus(faceOk, sheetOk) {
     const bar=document.getElementById('bar');
     if (!bar) return;
-    document.getElementById('fs').textContent = faceOk  ? '✅ Visage'         : '❌ Centrez votre visage';
-    document.getElementById('ss').textContent = sheetOk ? '✅ Feuille blanche' : '⬜ Feuille non détectée';
+    document.getElementById('fs').textContent = faceOk ? '✅ Visage' : '❌ Centrez votre visage';
+    const ssEl = document.getElementById('ss');
+    if (SHEET_REQUIRED) {
+      ssEl.textContent = sheetOk ? '✅ Feuille détectée' : '⬜ En attente de la feuille…';
+    } else {
+      ssEl.textContent = '';
+    }
     const cd = document.getElementById('cd');
-    if (faceOk && sheetOk) {
+    const readyToCapture = faceOk && (!SHEET_REQUIRED || sheetOk);
+    if (readyToCapture) {
       stableCount++;
       const s = Math.ceil((STABLE_NEEDED-stableCount)*.3);
       cd.textContent = s>0 ? '📸 '+s+'s' : '📸';
       bar.style.cssText += 'background:#14532d;border:2px solid #4ade80;';
-    } else if (faceOk) {
+    } else if (faceOk && SHEET_REQUIRED && !sheetOk) {
       stableCount=0; cd.textContent='';
       bar.style.cssText += 'background:#78350f;border:2px solid #fbbf24;';
     } else {
@@ -1907,7 +1924,8 @@ def main():
       const faceOk  = detectFace(data, canvas.width, canvas.height);
       const sheetOk = detectSheet(data, canvas.width, canvas.height);
       updateStatus(faceOk, sheetOk);
-      if (faceOk && sheetOk && stableCount >= STABLE_NEEDED) {
+      const readyToCapture = faceOk && (!SHEET_REQUIRED || sheetOk);
+      if (readyToCapture && stableCount >= STABLE_NEEDED) {
         captured=true; pwin._pikolabRunning=false; tryCapture();
       }
     }, 300);
@@ -1927,7 +1945,7 @@ def main():
   waitForVideo();
 })();
 </script>
-""", height=56, scrolling=False)
+""".replace("SHEET_REQUIRED_PLACEHOLDER", _sheet_js), height=56, scrolling=False)
 
         camera_photo = st.camera_input("Visage centré + feuille A4 pliée → capture automatique")
         if camera_photo:
