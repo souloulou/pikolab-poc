@@ -8,6 +8,7 @@ import os
 import urllib.request
 
 import streamlit as st
+import streamlit.components.v1 as components
 from google import genai
 import mediapipe as mp
 from mediapipe.tasks.python import BaseOptions
@@ -24,6 +25,7 @@ import matplotlib.patches as mpatches
 from collections import OrderedDict
 
 from season_advice import SEASON_ADVICE
+from multi_agent import run_consensus_analysis
 
 MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
 MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
@@ -122,22 +124,48 @@ SUBSEASON_RULES = {
 
 # Centroid scores for each season (temperature, value, saturation)
 SEASON_CENTROIDS = {
-    "Light Spring":  ( 0.3,  0.8,  0.3),
-    "Warm Spring":   ( 0.8,  0.3,  0.3),
-    "Bright Spring": ( 0.4,  0.4,  0.8),
-    "True Spring":   ( 0.5,  0.5,  0.5),
-    "Light Summer":  (-0.3,  0.8, -0.2),
-    "Cool Summer":   (-0.8,  0.3, -0.2),
-    "Soft Summer":   (-0.3,  0.3, -0.7),
-    "True Summer":   (-0.5,  0.5, -0.3),
-    "Soft Autumn":   ( 0.3, -0.3, -0.7),
-    "Warm Autumn":   ( 0.8, -0.3,  0.2),
-    "Deep Autumn":   ( 0.3, -0.8,  0.0),
-    "True Autumn":   ( 0.5, -0.5,  0.0),
-    "Deep Winter":   (-0.3, -0.8,  0.2),
-    "Cool Winter":   (-0.8, -0.3,  0.2),
-    "Bright Winter": (-0.3, -0.3,  0.8),
-    "True Winter":   (-0.5, -0.5,  0.3),
+    "Light Spring":  ( 0.28,  0.80,  0.28),
+    "Warm Spring":   ( 0.80,  0.28,  0.28),
+    "Bright Spring": ( 0.38,  0.38,  0.80),
+    "True Spring":   ( 0.42,  0.52,  0.42),
+    "Light Summer":  (-0.28,  0.78, -0.22),
+    "Cool Summer":   (-0.80,  0.28, -0.22),
+    "Soft Summer":   (-0.28,  0.28, -0.72),
+    "True Summer":   (-0.48,  0.48, -0.32),
+    "Soft Autumn":   ( 0.22, -0.28, -0.72),
+    "Warm Autumn":   ( 0.82, -0.22,  0.22),
+    "Deep Autumn":   ( 0.28, -0.82,  0.02),
+    "True Autumn":   ( 0.42, -0.58, -0.05),
+    "Deep Winter":   (-0.28, -0.80,  0.20),
+    "Cool Winter":   (-0.80, -0.28,  0.20),
+    "Bright Winter": (-0.28, -0.28,  0.80),
+    "True Winter":   (-0.48, -0.48,  0.28),
+}
+
+# Intervalles professionnels par saison (temp_min, temp_max, val_min, val_max).
+# Basés sur les standards colorimétrie (Sci/ART, Color Alliance, Zyla) :
+# - Warm Spring / Warm Autumn : teint CLAIREMENT chaud (temp > 0.52), reflets dorés-bronze marqués
+# - True / Light / Soft : chaud modéré ou neutre-chaud
+# - Cool Winter / Cool Summer : teint CLAIREMENT froid (temp < -0.42)
+# - Un teint neutre (|temp| ≤ 0.15) ne peut appartenir qu'aux saisons "True" ou "Soft"
+SEASON_BOUNDS = {
+    # (temp_min, temp_max, val_min, val_max)
+    "Light Spring":  ( 0.05,  0.58,  0.35,  1.00),
+    "Warm Spring":   ( 0.52,  1.00, -0.10,  0.80),  # exige teint clairement chaud
+    "Bright Spring": ( 0.05,  0.65, -0.10,  0.85),
+    "True Spring":   ( 0.08,  0.65,  0.05,  0.85),
+    "Light Summer":  (-0.62,  0.05,  0.35,  1.00),
+    "Cool Summer":   (-1.00, -0.42, -0.20,  0.75),  # exige teint clairement froid
+    "Soft Summer":   (-0.60,  0.05, -0.25,  0.70),
+    "True Summer":   (-0.72, -0.05,  0.05,  0.85),
+    "Soft Autumn":   ( 0.00,  0.48, -0.65,  0.25),
+    "Warm Autumn":   ( 0.52,  1.00, -0.70,  0.25),  # exige teint clairement chaud
+    "Deep Autumn":   ( 0.02,  0.58, -1.00, -0.30),
+    "True Autumn":   ( 0.08,  0.62, -0.85, -0.05),
+    "Deep Winter":   (-0.60,  0.05, -1.00, -0.30),
+    "Cool Winter":   (-1.00, -0.42, -0.65,  0.35),  # exige teint clairement froid
+    "Bright Winter": (-0.55,  0.10, -0.60,  0.35),
+    "True Winter":   (-0.75, -0.05, -0.85,  0.05),
 }
 
 
@@ -184,7 +212,7 @@ def validate_face(landmarks, image_shape):
     face_h = max(ys) - min(ys)
     face_area = face_w * face_h
     img_area = h * w
-    if face_area < img_area * 0.12:
+    if face_area < img_area * 0.04:
         return False, "Visage trop petit. Rapprochez-vous de la camera ou recadrez la photo."
 
     # --- Frontal check: left eye and right eye should be roughly symmetric ---
@@ -236,6 +264,44 @@ def create_skin_mask(shape, landmarks):
     left = create_polygon_mask(shape, landmarks, LEFT_CHEEK_IDX)
     right = create_polygon_mask(shape, landmarks, RIGHT_CHEEK_IDX)
     return cv2.bitwise_or(left, right)
+
+
+def create_neck_mask(shape, landmarks):
+    """
+    Masque de la zone cou/decollete sous le menton.
+    Utilise la position du menton (via JAWLINE_IDX) et descend de ~22 % de la hauteur du visage.
+    Zone trapezoidale, retrecissant vers le bas pour eviter les bords cheveux/vetements.
+    """
+    h, w = shape[:2]
+    mask = np.zeros((h, w), dtype=np.uint8)
+    jaw_pts = [landmarks[i] for i in JAWLINE_IDX if i < len(landmarks)]
+    if len(jaw_pts) < 5:
+        return mask
+
+    face_top = min(p[1] for p in jaw_pts)
+    chin_y = max(p[1] for p in jaw_pts)
+    face_height = max(1, chin_y - face_top)
+
+    neck_top = chin_y
+    neck_bottom = min(h - 5, chin_y + int(face_height * 0.22))
+    if neck_bottom <= neck_top + 10:
+        return mask
+
+    left_x = min(p[0] for p in jaw_pts)
+    right_x = max(p[0] for p in jaw_pts)
+    jaw_width = max(1, right_x - left_x)
+    # Inset les bords pour eviter les cheveux et le col du vetement
+    inset_top = int(jaw_width * 0.18)
+    inset_bot = int(jaw_width * 0.28)
+
+    pts = np.array([
+        [left_x + inset_top,  neck_top],
+        [right_x - inset_top, neck_top],
+        [right_x - inset_bot, neck_bottom],
+        [left_x + inset_bot,  neck_bottom],
+    ], dtype=np.int32)
+    cv2.fillPoly(mask, [pts], 255)
+    return mask
 
 
 def create_iris_mask(shape, landmarks):
@@ -554,11 +620,12 @@ def detect_white_region(image_rgb):
     a_ch = lab[:, :, 1].astype(int)
     b_ch = lab[:, :, 2].astype(int)
 
-    # Strict thresholds: very bright AND very neutral
+    # Thresholds: bright AND sufficiently neutral
+    # Slightly relaxed to handle folded A4 (smaller area, possible fold shadow)
     white_mask = (
-        (l_ch > 210)
-        & (np.abs(a_ch - 128) < 10)
-        & (np.abs(b_ch - 128) < 10)
+        (l_ch > 175)
+        & (np.abs(a_ch - 128) < 22)
+        & (np.abs(b_ch - 128) < 22)
     ).astype(np.uint8) * 255
 
     # Morphological cleanup to remove noise
@@ -570,8 +637,7 @@ def detect_white_region(image_rgb):
     if not contours:
         return None
 
-    # Minimum 5% of image area (was 2% — too permissive)
-    min_area = h * w * 0.05
+    min_area = h * w * 0.02  # Folded A4 is half the area → lower threshold
     img_area = h * w
 
     for contour in sorted(contours, key=cv2.contourArea, reverse=True):
@@ -589,7 +655,7 @@ def detect_white_region(image_rgb):
         if hull_area == 0:
             continue
         solidity = area / hull_area
-        if solidity < 0.7:
+        if solidity < 0.55:
             continue
 
         # Aspect ratio check: paper is roughly rectangular, not a thin strip
@@ -605,9 +671,9 @@ def detect_white_region(image_rgb):
         mean_a = cv2.mean(a_ch.astype(np.uint8), mask=region_mask)[0]
         mean_b = cv2.mean(b_ch.astype(np.uint8), mask=region_mask)[0]
 
-        if mean_l < 220:
+        if mean_l < 185:
             continue  # Not bright enough
-        if abs(mean_a - 128) > 8 or abs(mean_b - 128) > 8:
+        if abs(mean_a - 128) > 18 or abs(mean_b - 128) > 18:
             continue  # Not neutral enough
 
         return np.array(cv2.mean(image_rgb, mask=region_mask)[:3])
@@ -814,10 +880,24 @@ def compute_professional_profile(scores, contrast):
     }
 
 
+def _in_bounds(season_name, scores):
+    """Vérifie que les scores respectent les intervalles professionnels de la saison."""
+    b = SEASON_BOUNDS.get(season_name)
+    if b is None:
+        return True
+    t_min, t_max, v_min, v_max = b
+    return t_min <= scores["temperature"] <= t_max and v_min <= scores["value"] <= v_max
+
+
 def classify_season(scores, dominance_threshold):
-    """Classify into one of 16 seasons."""
+    """
+    Classifie en l'une des 16 saisons.
+    Utilise les intervalles professionnels (SEASON_BOUNDS) comme filtre dur :
+    une saison hors de ses bornes temp/value ne peut pas être sélectionnée.
+    Si aucune sous-saison n'est dans les bornes, on retombe sur la 'True' de la base.
+    """
     temp = scores["temperature"]
-    val = scores["value"]
+    val  = scores["value"]
 
     if temp > 0 and val > 0:
         base = "Spring"
@@ -835,32 +915,42 @@ def classify_season(scores, dominance_threshold):
     for sub_name, axis, direction in rules:
         if axis is None:
             continue
-        score_val = scores[axis]
-        strength = score_val if direction == "high" else -score_val
+        if not _in_bounds(sub_name, scores):
+            continue  # hors intervalles professionnels → exclu
+        sv = scores[axis]
+        strength = sv if direction == "high" else -sv
         if strength > best_strength:
             best_strength = strength
             best_match = sub_name
 
-    if best_strength > dominance_threshold:
+    if best_strength > dominance_threshold and best_match is not None:
         return best_match
 
+    # Fallback : première sous-saison valide dans les bornes, sinon True <Base>
     for sub_name, axis, _ in rules:
         if axis is None:
+            return sub_name  # c'est la True <base>
+        if _in_bounds(sub_name, scores):
             return sub_name
-    return best_match
+    return f"True {base}"
 
 
 def classify_top3(scores):
-    """Return top 3 seasons by distance to centroids, with match percentages."""
+    """
+    Top 3 saisons par distance aux centroides, avec filtre par intervalles professionnels.
+    Les saisons hors de leurs bornes reçoivent une pénalité de distance × 2.5
+    pour ne pas apparaître en tête si le profil ne correspond pas.
+    """
     point = np.array([scores["temperature"], scores["value"], scores["saturation"]])
     distances = {}
     for name, centroid in SEASON_CENTROIDS.items():
         dist = np.linalg.norm(point - np.array(centroid))
+        if not _in_bounds(name, scores):
+            dist *= 2.5  # pénalité hors intervalles professionnels
         distances[name] = dist
 
     sorted_seasons = sorted(distances.items(), key=lambda x: x[1])
 
-    # Convert distances to match percentages (inverse, normalized)
     max_dist = max(d for _, d in sorted_seasons[:5]) + 0.01
     top3 = []
     total_score = 0
@@ -869,7 +959,6 @@ def classify_top3(scores):
         top3.append((name, score, dist))
         total_score += score
 
-    # Normalize to percentages
     result = []
     for name, score, dist in top3:
         pct = (score / total_score * 100) if total_score > 0 else 33.3
@@ -1516,8 +1605,73 @@ MOBILE_CSS = "<style>\n" \
     "  [data-testid='stCameraInput'] { width: 100% !important; }\n" \
     "  [data-testid='stMetric'] { padding: 0.25rem !important; }\n" \
     "}\n" \
-    "[data-testid='stCameraInput'] video { max-height: 50vh; object-fit: contain; }\n" \
+    "[data-testid='stCameraInput'] video { max-height: 50vh; object-fit: contain; transform: scaleX(-1); }\n" \
     "</style>"
+
+
+# ── Rendu du bloc consensus multi-agents ──────────────────────────────────────
+
+_AGREEMENT_LABELS = {
+    "unanimite": ("Unanimite", "#2ecc71"),
+    "majorite":  ("Majorite",  "#f39c12"),
+    "desaccord": ("Desaccord", "#e74c3c"),
+}
+
+_BASE_ICONS = {
+    "Spring": "🌸",
+    "Summer": "☀️",
+    "Autumn": "🍂",
+    "Winter": "❄️",
+}
+
+
+def _render_consensus_block(consensus_data: dict) -> None:
+    """Affiche le tableau de votes des agents et le résultat consensuel."""
+    agreement = consensus_data.get("agreement_level", "desaccord")
+    label, color = _AGREEMENT_LABELS.get(agreement, ("Inconnu", "#888"))
+    consensus_season = consensus_data["consensus_season"]
+    overridden = consensus_data["overridden"]
+    base_votes = consensus_data.get("base_votes", {})
+
+    # Résumé des votes saison de base
+    votes_str = " · ".join(
+        f"{_BASE_ICONS.get(b, '')} {b} ×{n}"
+        for b, n in sorted(base_votes.items(), key=lambda x: -x[1])
+    )
+
+    override_note = " (corrige l'algorithme)" if overridden else " (confirme l'algorithme)"
+
+    with st.expander(f"Analyse multi-agents — {label}{override_note}", expanded=overridden):
+        st.markdown(
+            f"<span style='color:{color}; font-weight:700;'>● {label}</span> "
+            f"&nbsp;|&nbsp; Votes base : {votes_str}",
+            unsafe_allow_html=True,
+        )
+
+        agents = consensus_data.get("agents", [])
+        for agent in agents:
+            base = agent.get("base_season", "")
+            icon = _BASE_ICONS.get(base, "")
+            conf_pct = int(agent.get("confidence", 0) * 100)
+            is_consensus = agent["sub_season"] == consensus_season
+            marker = " ✓" if is_consensus else ""
+            temp = agent.get("temperature", "")
+            temp_label = {"chaud": "chaud", "froid": "froid", "neutre": "neutre"}.get(temp, temp)
+
+            st.markdown(
+                f"**{agent['name']}** — `{agent['sub_season']}`{marker} "
+                f"&nbsp;·&nbsp; {icon} {base} &nbsp;·&nbsp; {temp_label} &nbsp;·&nbsp; "
+                f"confiance {conf_pct} %",
+                unsafe_allow_html=False,
+            )
+            if agent.get("reasoning"):
+                st.caption(agent["reasoning"])
+
+        errors = consensus_data.get("errors", [])
+        if errors:
+            with st.expander("Erreurs agents", expanded=False):
+                for e in errors:
+                    st.warning(e)
 
 
 def main():
@@ -1538,7 +1692,7 @@ def main():
 
     if st.sidebar.button("Nouvelle analyse", use_container_width=True):
         for key in ["analysis_done", "ctx", "coach_messages", "demo_image",
-                     "last_scan", "guide_shown", "has_white_sheet"]:
+                     "last_scan", "has_white_sheet"]:
             st.session_state.pop(key, None)
         st.rerun()
 
@@ -1573,20 +1727,14 @@ def main():
         "sat_scale": sat_scale,
     }
 
+    # ---- Clé API Gemini ----
+    try:
+        gemini_api_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
+    except Exception:
+        gemini_api_key = os.environ.get("GEMINI_API_KEY", "")
+
     # ---- Acquisition ----
     image_rgb = None
-
-    GUIDE_PHOTO = (
-        "**Comment prendre votre photo ?**\n\n"
-        "Pour de meilleurs resultats, tenez une **feuille A4 blanche** "
-        "a cote de votre visage. Elle sera detectee automatiquement.\n\n"
-        "1. Lumiere naturelle (fenetre, pas de soleil direct)\n"
-        "2. Pas de maquillage, pas de lunettes\n"
-        "3. Desactivez les filtres et le mode beaute\n"
-        "4. Visage de face, cheveux attaches\n"
-        "5. Feuille blanche bien eclairee, sans ombre\n\n"
-        "*La feuille est optionnelle mais recommandee.*"
-    )
 
     # ---- Hero section (only before first analysis) ----
     hero_placeholder = st.empty()
@@ -1605,15 +1753,149 @@ def main():
         label_visibility="collapsed",
     )
 
-    if mode == "Appareil photo":
-        first_visit = "guide_shown" not in st.session_state
-        with st.expander("Comment prendre une bonne photo", expanded=first_visit):
-            st.markdown(GUIDE_PHOTO)
-            st.session_state["guide_shown"] = True
+    has_sheet = False
 
-        camera_photo = st.camera_input("Prenez votre selfie")
+    if mode == "Appareil photo":
+        st.caption("Sans maquillage · Lumiere naturelle · Visage de face · Feuille A4 blanche pliée en 2 à côté du visage")
+
+        # ---- Script de capture automatique (iframe via components.html) ----
+        components.html("""
+<style>
+  body { margin:0; padding:0; background:transparent; overflow:hidden; }
+  #bar {
+    background:#1c1917; color:#fff; border-radius:10px;
+    padding:10px 16px; font-size:14px; font-family:sans-serif;
+    display:flex; gap:16px; align-items:center; min-height:44px;
+    box-sizing:border-box; border:2px solid #555;
+    transition: background .3s, border .3s;
+  }
+  #cd { margin-left:auto; font-weight:700; font-size:16px; }
+</style>
+<div id="bar">
+  <span id="fs">⏳ Démarrage caméra…</span>
+  <span id="ss"></span>
+  <span id="cd"></span>
+</div>
+<script>
+(function() {
+  const pwin = window.parent;
+  if (pwin._pikolabRunning) return;
+  pwin._pikolabRunning = true;
+
+  const STABLE_NEEDED  = 8;
+  const SKIN_THRESHOLD = 0.07;
+  let stableCount = 0, captured = false;
+
+  function isSkin(r, g, b) {
+    return r>60&&r<250&&g>35&&g<220&&b>15&&b<195&&r>g&&r>b&&(r-Math.min(g,b))>10;
+  }
+
+  // Détection par zones : cherche une région avec >15% de pixels blancs/neutres
+  function detectSheet(px, w, h) {
+    const zones = [
+      [0,     0,   w/2, h/2],
+      [w/2,   0,   w,   h/2],
+      [0,   h/2,   w/2, h  ],
+      [w/2, h/2,   w,   h  ],
+      [0,     0,   w/3, h  ],
+      [2*w/3, 0,   w,   h  ],
+      [0,     0,   w,   h/3],
+    ];
+    const step = 4;
+    for (const [x1,y1,x2,y2] of zones) {
+      let white=0, total=0;
+      for (let y=y1; y<y2; y+=step) {
+        for (let x=x1; x<x2; x+=step) {
+          const i = ((y|0)*w+(x|0))*4;
+          const r=px[i], g=px[i+1], b=px[i+2];
+          total++;
+          if ((r+g+b)/3 > 165 && Math.max(r,g,b)-Math.min(r,g,b) < 60) white++;
+        }
+      }
+      if (total>0 && white/total > 0.15) return true;
+    }
+    return false;
+  }
+
+  function detectFace(px, w, h) {
+    const x1=Math.floor(w*.22), x2=Math.floor(w*.78);
+    const y1=Math.floor(h*.10), y2=Math.floor(h*.90);
+    let skin=0, total=0;
+    const step=5;
+    for (let y=y1; y<y2; y+=step)
+      for (let x=x1; x<x2; x+=step) {
+        const i=(y*w+x)*4; total++;
+        if (isSkin(px[i],px[i+1],px[i+2])) skin++;
+      }
+    return total>0 && skin/total >= SKIN_THRESHOLD;
+  }
+
+  function updateStatus(faceOk, sheetOk) {
+    const bar=document.getElementById('bar');
+    if (!bar) return;
+    document.getElementById('fs').textContent = faceOk  ? '✅ Visage'         : '❌ Centrez votre visage';
+    document.getElementById('ss').textContent = sheetOk ? '✅ Feuille blanche' : '⬜ Feuille non détectée';
+    const cd = document.getElementById('cd');
+    if (faceOk && sheetOk) {
+      stableCount++;
+      const s = Math.ceil((STABLE_NEEDED-stableCount)*.3);
+      cd.textContent = s>0 ? '📸 '+s+'s' : '📸';
+      bar.style.cssText += 'background:#14532d;border:2px solid #4ade80;';
+    } else if (faceOk) {
+      stableCount=0; cd.textContent='';
+      bar.style.cssText += 'background:#78350f;border:2px solid #fbbf24;';
+    } else {
+      stableCount=0; cd.textContent='';
+      bar.style.cssText += 'background:#1c1917;border:2px solid #f87171;';
+    }
+  }
+
+  function tryCapture() {
+    const pdoc = pwin.document;
+    const btn = pdoc.querySelector('[data-testid="stCameraInputTakePhoto"]')
+             || pdoc.querySelector('[data-testid="stCameraInput"] button');
+    if (btn) btn.click();
+  }
+
+  function startLoop(video) {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d', {willReadFrequently:true});
+    setInterval(() => {
+      if (captured || !video || video.readyState<2) return;
+      canvas.width  = video.videoWidth  || 640;
+      canvas.height = video.videoHeight || 480;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const {data} = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const faceOk  = detectFace(data, canvas.width, canvas.height);
+      const sheetOk = detectSheet(data, canvas.width, canvas.height);
+      updateStatus(faceOk, sheetOk);
+      if (faceOk && sheetOk && stableCount >= STABLE_NEEDED) {
+        captured=true; pwin._pikolabRunning=false; tryCapture();
+      }
+    }, 300);
+  }
+
+  function waitForVideo() {
+    const pdoc = pwin.document;
+    const v = pdoc.querySelector('[data-testid="stCameraInput"] video');
+    if (v) { startLoop(v); return; }
+    const obs = new pwin.MutationObserver(() => {
+      const v2 = pdoc.querySelector('[data-testid="stCameraInput"] video');
+      if (v2) { obs.disconnect(); setTimeout(()=>startLoop(v2), 800); }
+    });
+    obs.observe(pdoc.body, {childList:true, subtree:true});
+  }
+
+  waitForVideo();
+})();
+</script>
+""", height=56, scrolling=False)
+
+        camera_photo = st.camera_input("Visage centré + feuille A4 pliée → capture automatique")
         if camera_photo:
             image_rgb = load_image(camera_photo)
+            if image_rgb is not None:
+                image_rgb = np.fliplr(image_rgb).copy()
 
     elif mode == "Galerie":
         uploaded = st.file_uploader(
@@ -1651,20 +1933,18 @@ def main():
         st.caption("Prenez un selfie ou choisissez une photo pour decouvrir votre palette.")
         return
 
-    # ---- White sheet calibration ----
+    # ---- Detection feuille blanche — feedback immediat ----
     wb_reference = None
     if mode != "Demo":
-        has_sheet = st.checkbox(
-            "J'ai une feuille blanche visible sur la photo",
-            value=False,
-            key="has_white_sheet",
-        )
-        if has_sheet:
-            wb_reference = detect_white_region(image_rgb)
-            if wb_reference is not None:
-                st.success("Feuille blanche detectee — calibration couleur activee.")
-            else:
-                st.warning("Feuille blanche non trouvee. Verifiez qu'elle est bien visible, eclairee et sans ombre.")
+        wb_reference = detect_white_region(image_rgb)
+        if wb_reference is not None:
+            has_sheet = True
+            st.success("✅ Feuille blanche détectée — calibration couleur activée.")
+        else:
+            st.caption(
+                "Aucune feuille détectée — tenez une feuille A4 pliée en 2 "
+                "bien éclairée à côté du visage pour une analyse plus précise."
+            )
 
     # ---- Pipeline with progress ----
     hero_placeholder.empty()
@@ -1695,10 +1975,12 @@ def main():
         st.error("Visage trop petit ou mal cadre. Rapprochez-vous de la camera.")
         return
 
-    progress.progress(25, text="Detection cheveux, levres, sourcils...")
+    progress.progress(25, text="Detection cheveux, levres, sourcils, cou...")
+    neck_mask = create_neck_mask(image_rgb.shape, landmarks)
     hair_mask = create_hair_mask(image_rgb.shape, landmarks)
     lip_mask = create_lip_mask(image_rgb.shape, landmarks)
     eyebrow_mask = create_eyebrow_mask(image_rgb.shape, landmarks)
+    neck_px = int(np.count_nonzero(neck_mask))
     hair_px = int(np.count_nonzero(hair_mask))
     lip_px = int(np.count_nonzero(lip_mask))
 
@@ -1710,9 +1992,25 @@ def main():
         corrected = correct_exposure(image_rgb, skin_mask)
         correction_method = "Auto"
 
-    progress.progress(55, text="Analyse colorimetrique peau et iris...")
+    progress.progress(55, text="Analyse colorimetrique peau, cou et iris...")
     skin_pixels_rgb = extract_pixels(corrected, skin_mask)
-    skin_lab = pixels_to_lab(skin_pixels_rgb)
+    neck_pixels_rgb = extract_pixels(corrected, neck_mask)
+    # Si maquillage détecté : le cou devient la référence principale (65 %)
+    # Sinon : fusion joues 60 % + cou 40 %
+    has_makeup = not st.session_state.get("chk_no_makeup", True)
+    neck_ratio = 1.86 if has_makeup else 0.67  # neck_target = ratio * n_cheek
+    if len(neck_pixels_rgb) >= 30:
+        n_cheek = len(skin_pixels_rgb)
+        n_neck_target = int(n_cheek * neck_ratio)
+        if len(neck_pixels_rgb) >= n_neck_target:
+            idx = np.random.default_rng(42).choice(len(neck_pixels_rgb), n_neck_target, replace=False)
+            neck_sample = neck_pixels_rgb[idx]
+        else:
+            neck_sample = neck_pixels_rgb
+        combined_skin_pixels = np.vstack([skin_pixels_rgb, neck_sample])
+    else:
+        combined_skin_pixels = skin_pixels_rgb
+    skin_lab = pixels_to_lab(combined_skin_pixels)
     skin_stats = compute_skin_stats(skin_lab)
 
     iris_pixels_rgb = extract_pixels(corrected, iris_mask)
@@ -1751,22 +2049,44 @@ def main():
     )
 
     progress.progress(100, text="Analyse terminee !")
+    progress.empty()
+
+    # ---- Consensus multi-agents ----
+    consensus_data = None
+    if gemini_api_key and mode != "Demo":
+        with st.spinner("Validation multi-agents en cours (3 agents IA)..."):
+            try:
+                consensus_data = run_consensus_analysis(
+                    corrected, season, confidence, gemini_api_key
+                )
+                if consensus_data["overridden"]:
+                    season = consensus_data["consensus_season"]
+                    advice = SEASON_ADVICE.get(season, {})
+                    diagnostic = generate_personal_diagnostic(
+                        skin_stats, iris_stats, hair_info, lip_undertone,
+                        profile, season, advice, contrast,
+                    )
+            except Exception as exc:
+                st.warning(f"Validation multi-agents non disponible : {exc}")
+
     st.session_state["analysis_done"] = True
-    # Store context for Coach IA page
     st.session_state["ctx"] = {
         "season": season, "advice": advice, "profile": profile,
         "diagnostic": diagnostic, "hair_info": hair_info,
         "lip_undertone": lip_undertone, "scores": scores, "contrast": contrast,
+        "consensus": consensus_data,
     }
-    progress.empty()
 
     # ---- Season result card ----
     season_colors = SEASON_PALETTES.get(season, ["#E07A5F", "#F2CC8F"])
     c1 = season_colors[0]
     c2 = season_colors[1] if len(season_colors) > 1 else c1
 
+    has_makeup = not st.session_state.get("chk_no_makeup", True)
     if mode == "Demo":
         conf_text = "Demonstration"
+    elif has_makeup:
+        conf_text = "Analyse avec maquillage — resultats bases principalement sur le teint du cou"
     elif confidence >= 0.7:
         conf_text = "Resultat fiable"
     elif confidence >= 0.5:
@@ -1792,6 +2112,19 @@ def main():
         <p style="margin-top: 0.5rem; color: #888; font-size: 0.85rem;">{conf_text}</p>
     </div>
     """, unsafe_allow_html=True)
+
+    # ---- Disclaimer maquillage ----
+    if has_makeup and mode != "Demo":
+        st.info(
+            "**Analyse effectuee avec maquillage.** "
+            "Le fond de teint et le contouring peuvent masquer le sous-ton reel du visage. "
+            "Pour compenser, l'analyse s'appuie davantage sur le teint du cou (non maquille). "
+            "Pour un resultat optimal, refaites l'analyse sans maquillage."
+        )
+
+    # ---- Bloc consensus multi-agents ----
+    if consensus_data:
+        _render_consensus_block(consensus_data)
 
     # ---- Questionnaire (optional, after results) ----
     with st.expander("Affinez vos resultats (30 secondes)", expanded=False):
@@ -1905,8 +2238,11 @@ def main():
         if hair_info["color"] != "inconnu":
             st.markdown("---")
             st.markdown(f"**Cheveux detectes** : {hair_info['color']} ({hair_info['warmth']}, {hair_info['depth']})")
-        if eyebrow_info["color"] != "inconnu" and eyebrow_info["color"] != hair_info["color"]:
+        natural_brows = st.session_state.get("chk_natural_eyebrows", True)
+        if natural_brows and eyebrow_info["color"] != "inconnu" and eyebrow_info["color"] != hair_info["color"]:
             st.caption(f"Sourcils : {eyebrow_info['color']} — si differents des cheveux, c'est souvent un indice de votre couleur naturelle.")
+        elif not natural_brows:
+            st.caption("Sourcils non naturels — non pris en compte dans l'analyse.")
         if lip_undertone != "inconnu":
             st.caption(f"Levres : pigmentation {lip_undertone}")
 
@@ -2118,7 +2454,8 @@ def main():
             # Build extended overlay with all masks
             overlay = corrected.copy().astype(np.float32)
             for mask, color in [
-                (skin_mask, [0, 200, 0]),       # green = skin
+                (skin_mask, [0, 200, 0]),       # green = joues
+                (neck_mask, [0, 240, 160]),      # teal = cou
                 (iris_mask, [100, 100, 255]),    # blue = iris
                 (hair_mask, [255, 165, 0]),      # orange = hair
                 (lip_mask, [255, 50, 100]),      # pink = lips
@@ -2129,13 +2466,14 @@ def main():
                     overlay[region] = overlay[region] * 0.5 + np.array(color, dtype=np.float32) * 0.5
             overlay = np.clip(overlay, 0, 255).astype(np.uint8)
             st.image(overlay, caption="Zones detectees", use_container_width=True)
-            st.caption("Vert=peau, Bleu=iris, Orange=cheveux, Rose=levres, Brun=sourcils")
+            st.caption("Vert=joues, Turquoise=cou, Bleu=iris, Orange=cheveux, Rose=levres, Brun=sourcils")
 
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Peau", f"{skin_px:,} px")
-            col2.metric("Iris", f"{iris_px:,} px")
-            col3.metric("Cheveux", f"{hair_px:,} px")
-            col4.metric("Levres", f"{lip_px:,} px")
+            col1, col2, col3, col4, col5 = st.columns(5)
+            col1.metric("Joues", f"{skin_px:,} px")
+            col2.metric("Cou", f"{neck_px:,} px")
+            col3.metric("Iris", f"{iris_px:,} px")
+            col4.metric("Cheveux", f"{hair_px:,} px")
+            col5.metric("Levres", f"{lip_px:,} px")
 
             st.image(image_rgb, caption="Originale", use_container_width=True)
             st.image(corrected, caption=f"Correction ({correction_method})", use_container_width=True)
