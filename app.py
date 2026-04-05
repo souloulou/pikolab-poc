@@ -1856,7 +1856,6 @@ def main():
                 "Lumière naturelle (jour)",
                 "Artificiel — lumière blanche (LED, néon)",
                 "Artificiel — lumière jaune (ampoule, halogène)",
-                "Artificiel — faible ou nuit",
                 "Je ne sais pas",
             ],
             horizontal=False,
@@ -1868,12 +1867,7 @@ def main():
                 "Une feuille blanche permet de compenser dans tous les cas."
             ),
         )
-        if light_type == "Artificiel — faible ou nuit":
-            st.warning(
-                "Éclairage faible : résultat peu fiable. "
-                "Préférez une fenêtre bien éclairée ou utilisez une feuille blanche comme référence."
-            )
-        elif light_type == "Artificiel — lumière jaune (ampoule, halogène)":
+        if light_type == "Artificiel — lumière jaune (ampoule, halogène)":
             st.warning(
                 "Lumière jaune détectée : cast chaud fort qui peut faire lire un teint neutre comme chaud. "
                 "La correction est atténuée pour éviter une inversion. Utilisez une feuille blanche pour plus de précision."
@@ -2221,7 +2215,6 @@ def main():
         "Lumière naturelle (jour)":                      1.0,   # cast négligeable, correction complète
         "Artificiel — lumière blanche (LED, néon)":      0.75,  # cast bleu-vert léger
         "Artificiel — lumière jaune (ampoule, halogène)": 0.35, # cast chaud fort → correction partielle
-        "Artificiel — faible ou nuit":                   0.35,  # conditions difficiles
         "Je ne sais pas":                                0.55,  # compromis prudent
     }
     _wb_strength = _WB_STRENGTH.get(_light, 1.0)
@@ -2356,7 +2349,7 @@ def main():
 
     has_makeup = st.session_state.get("chk_has_makeup", False)
     _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
-    _bad_light  = _light in ("Artificiel — faible ou nuit", "Artificiel — lumière jaune (ampoule, halogène)")
+    _bad_light  = _light in ("Artificiel — lumière jaune (ampoule, halogène)",)
     _ok_light   = _light in ("Lumière naturelle (jour)",)
     if mode == "Demo":
         conf_text = "Demonstration"
