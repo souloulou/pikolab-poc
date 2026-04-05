@@ -74,6 +74,7 @@ system_prompt = build_coach_system_prompt(
     ctx.get("hair_info", {}),
     ctx.get("lip_undertone", "inconnu"),
     quiz_data,
+    light_type=ctx.get("light_type"),
 )
 
 # ---- Chat ----

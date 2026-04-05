@@ -1420,7 +1420,7 @@ def _format_scan_context():
     return "\n".join(lines)
 
 
-def build_coach_system_prompt(season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data):
+def build_coach_system_prompt(season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data, light_type=None):
     """Build a comprehensive system prompt with all client context."""
     diag_text = "\n".join(
         f"- {d['feature']}: {d['title']} — {d['detail']}" for d in diagnostic
@@ -1491,6 +1491,7 @@ PROFIL DU CLIENT :
 - Saison : {season}
 - Description : {advice.get('description', '')}
 - Sous-ton : {profile['undertone']} (score brut: {profile['raw_undertone']:.2f})
+- Eclairage au moment de l'analyse : {light_type or 'non renseigne'}
 - Valeur/profondeur : {profile['depth']}
 - Chroma : {profile['chroma']}
 - Contraste : {profile['contrast']}
@@ -1732,7 +1733,7 @@ def main():
         layout="centered",
         initial_sidebar_state="auto",
     )
-    st.html(MOBILE_CSS)
+    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
 
     # ---- Sidebar (visible on desktop) ----
     st.sidebar.header("PikoLab")
@@ -1839,10 +1840,36 @@ def main():
                 help="Feuille A4 pliée en 2, tenue à plat à côté du visage — améliore la précision du sous-ton",
             )
 
+        # ---- Question éclairage ----
+        light_type = st.radio(
+            "Éclairage au moment de la photo :",
+            ["Lumière naturelle (jour)", "Artificiel — pièce bien éclairée", "Artificiel — faible ou nuit"],
+            horizontal=True,
+            key="chk_light_type",
+            help=(
+                "La lumière naturelle est l'idéal pour la colorimétrie. "
+                "La lumière tungstène ajoute un cast jaune-orangé ; "
+                "le néon ajoute un cast bleu-vert — l'analyse sera moins précise."
+            ),
+        )
+        if light_type == "Artificiel — faible ou nuit":
+            st.warning(
+                "Éclairage faible détecté. L'analyse colorimétrique est moins fiable en lumière artificielle. "
+                "Préférez une fenêtre bien éclairée ou ajoutez une feuille blanche comme référence."
+            )
+        elif light_type == "Artificiel — pièce bien éclairée":
+            st.caption(
+                "Conseil : placez-vous face à une fenêtre (sans soleil direct) pour un résultat plus fiable. "
+                "Une feuille blanche comme référence compense en partie le cast de lumière artificielle."
+            )
+    else:
+        light_type = "Lumière naturelle (jour)"
+
     use_sheet = st.session_state.get("chk_use_sheet", False)
 
     if mode == "Appareil photo":
-        st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 pliée en 2 à côté du visage" if use_sheet else ""))
+        light_label = "" if light_type == "Lumière naturelle (jour)" else f" · {light_type}"
+        st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 pliée en 2 à côté du visage" if use_sheet else "") + light_label)
 
         # ---- Script de capture automatique + overlay canvas ----
         _sheet_js = "true" if use_sheet else "false"
@@ -2273,6 +2300,7 @@ def main():
                 st.warning(f"Validation multi-agents non disponible : {exc}")
 
     st.session_state["analysis_done"] = True
+    light_type = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
     st.session_state["ctx"] = {
         "season": season, "advice": advice, "profile": profile,
         "diagnostic": diagnostic, "hair_info": hair_info,
@@ -2282,6 +2310,7 @@ def main():
         "imperfection_note": imperfection_note,
         "face_b": face_stats["b"],
         "neck_b": neck_stats_raw["b"] if neck_stats_raw is not None else None,
+        "light_type": light_type,
     }
 
     # ---- Season result card ----
@@ -2290,10 +2319,19 @@ def main():
     c2 = season_colors[1] if len(season_colors) > 1 else c1
 
     has_makeup = st.session_state.get("chk_has_makeup", False)
+    _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
+    _artificial_night = _light == "Artificiel — faible ou nuit"
+    _artificial_day   = _light == "Artificiel — pièce bien éclairée"
     if mode == "Demo":
         conf_text = "Demonstration"
+    elif _artificial_night:
+        conf_text = "Resultat a confirmer — lumiere insuffisante ou artificielle. Reprenez en lumiere naturelle."
+    elif has_makeup and _artificial_day:
+        conf_text = "Analyse avec maquillage + eclairage artificiel — precision reduite"
     elif has_makeup:
         conf_text = "Analyse avec maquillage — resultats bases principalement sur le teint du cou"
+    elif _artificial_day:
+        conf_text = "Resultat indicatif — eclairage artificiel. Une feuille blanche ameliore la precision."
     elif confidence >= 0.7:
         conf_text = "Resultat fiable"
     elif confidence >= 0.5:
