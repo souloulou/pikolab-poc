@@ -64,8 +64,8 @@ SKIN_WEIGHT = 0.7
 IRIS_WEIGHT = 0.3
 
 DEFAULTS = {
-    "temp_center": 17.0,
-    "temp_scale": 12.0,
+    "temp_center": 13.0,  # Peau neutre réelle ≈ b* 12-14 en CIELab standard (était 17 → trop haut)
+    "temp_scale": 8.0,   # Plage réaliste b*: 5 (froid) → 21 (chaud), scale réduit de 12 (était trop large)
     "value_center": 55.0,
     "sat_center": 20.0,
     "sat_scale": 15.0,
