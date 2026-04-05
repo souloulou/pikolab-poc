@@ -2415,6 +2415,13 @@ def main():
                 if _c_base and _c_base != _algo_base and _c_agree in ("majorite", "unanimite"):
                     season = classify_season_in_base(scores, _c_base)
                     advice = SEASON_ADVICE.get(season, {})
+                    # Clamp skin_temp_norm to the temp bounds of the overridden season
+                    # so the undertone gauge is coherent with the displayed season.
+                    _bounds = SEASON_BOUNDS.get(season)
+                    if _bounds is not None:
+                        _t_min, _t_max = _bounds[0], _bounds[1]
+                        skin_temp_norm = float(np.clip(skin_temp_norm, _t_min, _t_max))
+                    profile = compute_professional_profile(scores, contrast, skin_temp=skin_temp_norm)
                     diagnostic = generate_personal_diagnostic(
                         skin_stats, iris_stats, hair_info, lip_undertone,
                         profile, season, advice, contrast,
