@@ -764,6 +764,29 @@ def compute_skin_stats(lab_pixels):
     }
 
 
+def compute_skin_stats_robust(lab_pixels):
+    """Stats robustes : filtre les pixels haute chroma (imperfections, rougeurs)
+    et utilise la médiane pour b* afin de résister aux pics d'overtone.
+
+    - On conserve les 75% de pixels les moins saturés (joues nettes, cou propre)
+    - b* en médiane : insensible aux taches jaunes/rouges isolées
+    - C* en moyenne globale : représente la saturation réelle de la zone
+    """
+    if len(lab_pixels) == 0:
+        return {"L": 0.0, "a": 0.0, "b": 0.0, "C": 0.0}
+    C = np.sqrt(lab_pixels[:, 1] ** 2 + lab_pixels[:, 2] ** 2)
+    threshold = np.percentile(C, 75)
+    clean = lab_pixels[C <= threshold]
+    if len(clean) < 20:
+        clean = lab_pixels
+    return {
+        "L": float(np.mean(clean[:, 0])),
+        "a": float(np.mean(clean[:, 1])),
+        "b": float(np.median(clean[:, 2])),  # médiane : résiste aux overtones isolés
+        "C": float(np.mean(C)),
+    }
+
+
 def extract_iris_dominant(pixels_rgb):
     if len(pixels_rgb) < 20:
         return None
@@ -2134,23 +2157,47 @@ def main():
     progress.progress(55, text="Analyse colorimetrique peau, cou et iris...")
     skin_pixels_rgb = extract_pixels(corrected, skin_mask)
     neck_pixels_rgb = extract_pixels(corrected, neck_mask)
-    # Si maquillage détecté : le cou devient la référence principale (65 %)
-    # Sinon : fusion joues 60 % + cou 40 %
     has_makeup = st.session_state.get("chk_has_makeup", False)
-    neck_ratio = 1.86 if has_makeup else 0.67  # neck_target = ratio * n_cheek
-    if len(neck_pixels_rgb) >= 30:
-        n_cheek = len(skin_pixels_rgb)
-        n_neck_target = int(n_cheek * neck_ratio)
-        if len(neck_pixels_rgb) >= n_neck_target:
-            idx = np.random.default_rng(42).choice(len(neck_pixels_rgb), n_neck_target, replace=False)
-            neck_sample = neck_pixels_rgb[idx]
-        else:
-            neck_sample = neck_pixels_rgb
-        combined_skin_pixels = np.vstack([skin_pixels_rgb, neck_sample])
+
+    # --- Stats robustes séparées visage / cou ---
+    face_lab = pixels_to_lab(skin_pixels_rgb)
+    face_stats = compute_skin_stats_robust(face_lab)
+
+    neck_lab_pixels = pixels_to_lab(neck_pixels_rgb) if len(neck_pixels_rgb) >= 30 else None
+    neck_stats_raw = compute_skin_stats_robust(neck_lab_pixels) if neck_lab_pixels is not None else None
+
+    if neck_stats_raw is not None:
+        # Overtone = écart b* visage − cou (positif → overtone chaud sur le visage)
+        overtone_delta = round(face_stats["b"] - neck_stats_raw["b"], 2)
+        # Le cou est la référence principale pour b* (sous-ton pur)
+        # Maquillage → cou pèse encore plus (80 %) ; sans maquillage → 65 %
+        neck_w = 0.80 if has_makeup else 0.65
+        face_w = 1.0 - neck_w
+        skin_stats = {
+            "L": face_stats["L"] * face_w + neck_stats_raw["L"] * neck_w,
+            "a": face_stats["a"] * face_w + neck_stats_raw["a"] * neck_w,
+            "b": face_stats["b"] * face_w + neck_stats_raw["b"] * neck_w,
+            "C": face_stats["C"] * face_w + neck_stats_raw["C"] * neck_w,
+        }
     else:
-        combined_skin_pixels = skin_pixels_rgb
-    skin_lab = pixels_to_lab(combined_skin_pixels)
-    skin_stats = compute_skin_stats(skin_lab)
+        overtone_delta = 0.0
+        skin_stats = face_stats
+
+    # --- Signature des imperfections (pixels haute chroma du visage) ---
+    # Les taches et rougeurs révèlent le type d'overtone → indice de sous-saison
+    imperfection_note = None
+    if len(face_lab) >= 40:
+        C_face = np.sqrt(face_lab[:, 1] ** 2 + face_lab[:, 2] ** 2)
+        blemish_px = face_lab[C_face > np.percentile(C_face, 80)]
+        if len(blemish_px) >= 10:
+            b_blem = float(np.mean(blemish_px[:, 2]))
+            a_blem = float(np.mean(blemish_px[:, 1]))
+            if a_blem > 8 and b_blem < 10:
+                imperfection_note = "rougeurs dominantes → signal teint froid/neutre"
+            elif b_blem > 12 and a_blem < 8:
+                imperfection_note = "taches jaune-dorées → signal teint chaud"
+            elif a_blem > 6 and b_blem > 10:
+                imperfection_note = "taches chauds-rosées → signal neutre-chaud"
 
     iris_pixels_rgb = extract_pixels(corrected, iris_mask)
     iris_stats = extract_iris_dominant(iris_pixels_rgb) if len(iris_pixels_rgb) > 0 else None
@@ -2175,9 +2222,10 @@ def main():
     progress.progress(85, text="Classification saisonniere...")
     scores = compute_scores(skin_stats, iris_stats, params)
     contrast = compute_contrast(skin_stats, iris_stats)
-    # Skin-only temperature: used for undertone gauge display (iris excluded)
+    # Référence b* pour la jauge : cou en priorité (non pollué par overtone)
+    ref_b_for_gauge = neck_stats_raw["b"] if neck_stats_raw is not None else face_stats["b"]
     skin_temp_norm = float(np.clip(
-        (skin_stats["b"] - params["temp_center"]) / params["temp_scale"], -1, 1
+        (ref_b_for_gauge - params["temp_center"]) / params["temp_scale"], -1, 1
     ))
     profile = compute_professional_profile(scores, contrast, skin_temp=skin_temp_norm)
     season = classify_season(scores, dominance_thresh)
@@ -2214,6 +2262,10 @@ def main():
         "diagnostic": diagnostic, "hair_info": hair_info,
         "lip_undertone": lip_undertone, "scores": scores, "contrast": contrast,
         "consensus": consensus_data,
+        "overtone_delta": overtone_delta,
+        "imperfection_note": imperfection_note,
+        "face_b": face_stats["b"],
+        "neck_b": neck_stats_raw["b"] if neck_stats_raw is not None else None,
     }
 
     # ---- Season result card ----
@@ -2349,10 +2401,32 @@ def main():
             st.pyplot(fig)
             plt.close(fig)
         st.caption(
-            "Le **sous-ton peau** est mesuré uniquement sur la peau (pas les yeux). "
-            "La **valeur** indique la clarté globale du coloring — une valeur sombre "
-            "('Foncé') correspond aux saisons 'Deep', indépendamment du contraste peau/yeux."
+            "Le **sous-ton peau** est mesuré sur le cou (référence non polluée) "
+            "quand il est visible. La **valeur** indique la clarté globale — 'Foncé' "
+            "correspond aux saisons 'Deep', indépendamment du contraste peau/yeux."
         )
+
+        # --- Analyse overtone visage vs cou ---
+        _ot = ctx.get("overtone_delta", 0.0)
+        _nb = ctx.get("neck_b")
+        _fb = ctx.get("face_b")
+        if _nb is not None:
+            if abs(_ot) >= 2.5:
+                if _ot > 0:
+                    st.info(
+                        f"**Overtone chaud détecté** : le visage est plus jaune/doré "
+                        f"que le cou (Δb* = +{_ot:.1f}). Cause possible : exposition solaire, "
+                        f"rougeurs, fond de teint chaud. Le sous-ton mesuré s'appuie sur le cou."
+                    )
+                else:
+                    st.info(
+                        f"**Overtone froid détecté** : le visage est plus rosé/bleuté "
+                        f"que le cou (Δb* = {_ot:.1f}). Cause possible : rougeurs, maquillage "
+                        f"froid, lumière. Le sous-ton mesuré s'appuie sur le cou."
+                    )
+        _imp = ctx.get("imperfection_note")
+        if _imp:
+            st.caption(f"Signature des imperfections : {_imp}")
 
         st.markdown("---")
         st.markdown("### Correspondance saisons")
