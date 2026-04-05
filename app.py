@@ -96,76 +96,92 @@ SEASON_PALETTES = OrderedDict({
 })
 
 SUBSEASON_RULES = {
+    # Ordre : sous-saison la plus distinctive en premier, True en dernier (fallback)
     "Spring": [
+        ("Warm Spring",   "temperature", "high"),  # clairement chaud avant tout
         ("Light Spring",  "value",       "high"),
-        ("Warm Spring",   "temperature", "high"),
         ("Bright Spring", "saturation",  "high"),
         ("True Spring",   None,          None),
     ],
     "Summer": [
+        ("Cool Summer",   "temperature", "low"),   # clairement froid avant tout
         ("Light Summer",  "value",       "high"),
-        ("Cool Summer",   "temperature", "low"),
         ("Soft Summer",   "saturation",  "low"),
         ("True Summer",   None,          None),
     ],
     "Autumn": [
+        ("Warm Autumn",   "temperature", "high"),  # clairement chaud avant tout
+        ("Deep Autumn",   "value",       "low"),   # sombre ET chaud (bornes strictes)
         ("Soft Autumn",   "saturation",  "low"),
-        ("Warm Autumn",   "temperature", "high"),
-        ("Deep Autumn",   "value",       "low"),
         ("True Autumn",   None,          None),
     ],
     "Winter": [
+        ("Cool Winter",   "temperature", "low"),   # clairement froid avant tout
         ("Deep Winter",   "value",       "low"),
-        ("Cool Winter",   "temperature", "low"),
         ("Bright Winter", "saturation",  "high"),
         ("True Winter",   None,          None),
     ],
 }
 
-# Centroid scores for each season (temperature, value, saturation)
+# Centroïdes professionnels (température, valeur, saturation) — Sci/ART / Zyla / Color Alliance
+# Recalibrés pour temp_center=13, temp_scale=8 (b*=13 → score 0, b*=21 → score +1)
 SEASON_CENTROIDS = {
-    "Light Spring":  ( 0.28,  0.80,  0.28),
-    "Warm Spring":   ( 0.80,  0.28,  0.28),
-    "Bright Spring": ( 0.38,  0.38,  0.80),
-    "True Spring":   ( 0.42,  0.52,  0.42),
-    "Light Summer":  (-0.28,  0.78, -0.22),
-    "Cool Summer":   (-0.80,  0.28, -0.22),
-    "Soft Summer":   (-0.28,  0.28, -0.72),
-    "True Summer":   (-0.48,  0.48, -0.32),
-    "Soft Autumn":   ( 0.22, -0.28, -0.72),
-    "Warm Autumn":   ( 0.82, -0.22,  0.22),
-    "Deep Autumn":   ( 0.28, -0.82,  0.02),
-    "True Autumn":   ( 0.42, -0.58, -0.05),
-    "Deep Winter":   (-0.28, -0.80,  0.20),
-    "Cool Winter":   (-0.80, -0.28,  0.20),
-    "Bright Winter": (-0.28, -0.28,  0.80),
-    "True Winter":   (-0.48, -0.48,  0.28),
+    "Light Spring":  ( 0.35,  0.72,  0.22),   # chaud, très clair, modéré
+    "Warm Spring":   ( 0.72,  0.32,  0.22),   # clairement chaud, moyen-clair
+    "Bright Spring": ( 0.32,  0.38,  0.78),   # chaud, vif
+    "True Spring":   ( 0.35,  0.52,  0.38),   # neutre-chaud équilibré, clair
+    "Light Summer":  (-0.38,  0.75, -0.28),   # froid, très clair, doux
+    "Cool Summer":   (-0.75,  0.22, -0.25),   # clairement froid, moyen
+    "Soft Summer":   (-0.30,  0.20, -0.68),   # froid à neutre, très doux
+    "True Summer":   (-0.50,  0.45, -0.32),   # froid équilibré, moyen-clair
+    "Soft Autumn":   ( 0.20, -0.22, -0.68),   # légèrement chaud, moyen, très doux
+    "Warm Autumn":   ( 0.72, -0.25,  0.18),   # clairement chaud, moyen-sombre
+    "Deep Autumn":   ( 0.55, -0.72,  0.05),   # chaud ET sombre (pas neutre-chaud!)
+    "True Autumn":   ( 0.35, -0.45, -0.12),   # neutre-chaud à chaud, moyen-sombre
+    "Deep Winter":   (-0.32, -0.75,  0.22),   # froid à neutre, sombre
+    "Cool Winter":   (-0.75, -0.22,  0.18),   # clairement froid, moyen
+    "Bright Winter": (-0.28, -0.25,  0.78),   # froid à neutre, vif
+    "True Winter":   (-0.52, -0.50,  0.25),   # froid équilibré, sombre
 }
 
-# Intervalles professionnels par saison (temp_min, temp_max, val_min, val_max).
-# Basés sur les standards colorimétrie (Sci/ART, Color Alliance, Zyla) :
-# - Warm Spring / Warm Autumn : teint CLAIREMENT chaud (temp > 0.52), reflets dorés-bronze marqués
-# - True / Light / Soft : chaud modéré ou neutre-chaud
-# - Cool Winter / Cool Summer : teint CLAIREMENT froid (temp < -0.42)
-# - Un teint neutre (|temp| ≤ 0.15) ne peut appartenir qu'aux saisons "True" ou "Soft"
+# ============================================================
+# Intervalles professionnels par saison (temp_min, temp_max, val_min, val_max)
+#
+# Règles fondamentales (Sci/ART, Zyla, Color Me Beautiful) :
+#   - "Neutre-chaud" (0.10 ≤ temp ≤ 0.35) → True Autumn / Soft Autumn / True Spring
+#     JAMAIS Deep Autumn ni Warm Autumn ni Warm Spring
+#   - Deep Autumn exige temp ≥ 0.38 ET val ≤ -0.38 (chaud ET sombre, pas juste sombre)
+#   - Warm Spring / Warm Autumn exigent temp ≥ 0.45 (teint clairement doré-bronze)
+#   - Cool Summer / Cool Winter exigent temp ≤ -0.42 (teint clairement rosé-bleuté)
+#   - Soft Autumn / Soft Summer : zone neutre admise, chroma très faible seulement
+#   - Light Spring / Light Summer : valeur élevée obligatoire (teint clair-pâle)
+# ============================================================
 SEASON_BOUNDS = {
     # (temp_min, temp_max, val_min, val_max)
-    "Light Spring":  ( 0.05,  0.58,  0.35,  1.00),
-    "Warm Spring":   ( 0.52,  1.00, -0.10,  0.80),  # exige teint clairement chaud
-    "Bright Spring": ( 0.05,  0.65, -0.10,  0.85),
-    "True Spring":   ( 0.08,  0.65,  0.05,  0.85),
-    "Light Summer":  (-0.62,  0.05,  0.35,  1.00),
-    "Cool Summer":   (-1.00, -0.42, -0.20,  0.75),  # exige teint clairement froid
-    "Soft Summer":   (-0.60,  0.05, -0.25,  0.70),
-    "True Summer":   (-0.72, -0.05,  0.05,  0.85),
-    "Soft Autumn":   ( 0.00,  0.48, -0.65,  0.25),
-    "Warm Autumn":   ( 0.52,  1.00, -0.70,  0.25),  # exige teint clairement chaud
-    "Deep Autumn":   ( 0.02,  0.58, -1.00, -0.30),
-    "True Autumn":   ( 0.08,  0.62, -0.85, -0.05),
-    "Deep Winter":   (-0.60,  0.05, -1.00, -0.30),
-    "Cool Winter":   (-1.00, -0.42, -0.65,  0.35),  # exige teint clairement froid
-    "Bright Winter": (-0.55,  0.10, -0.60,  0.35),
-    "True Winter":   (-0.75, -0.05, -0.85,  0.05),
+
+    # PRINTEMPS — chaud, clair à moyen, vif à modéré
+    "Light Spring":  ( 0.12,  0.65,  0.32,  1.00),  # chaud léger + clair
+    "Warm Spring":   ( 0.45,  1.00, -0.12,  0.78),  # clairement chaud (doré-bronzé)
+    "Bright Spring": ( 0.10,  0.70, -0.08,  0.85),  # chaud + très vif
+    "True Spring":   ( 0.10,  0.65,  0.05,  0.85),  # neutre-chaud équilibré
+
+    # ÉTÉ — froid, clair à moyen, doux
+    "Light Summer":  (-0.70,  0.00,  0.30,  1.00),  # froid + clair
+    "Cool Summer":   (-1.00, -0.42, -0.22,  0.72),  # clairement froid (rosé-bleuté)
+    "Soft Summer":   (-0.65,  0.05, -0.35,  0.62),  # froid à neutre, très doux
+    "True Summer":   (-0.78, -0.10,  0.00,  0.78),  # froid équilibré
+
+    # AUTOMNE — chaud, moyen à sombre, doux à modéré
+    "Soft Autumn":   ( 0.00,  0.42, -0.58,  0.22),  # neutre à légèrement chaud, doux
+    "Warm Autumn":   ( 0.45,  1.00, -0.68,  0.22),  # clairement chaud (terre-dorée)
+    "Deep Autumn":   ( 0.38,  0.85, -1.00, -0.38),  # chaud (≥0.38) ET sombre (≤-0.38)
+    "True Autumn":   ( 0.12,  0.62, -0.78,  0.05),  # neutre-chaud à chaud, moyen-sombre
+
+    # HIVER — froid, moyen à sombre, vif ou profond
+    "Deep Winter":   (-0.62,  0.10, -1.00, -0.38),  # froid à neutre + sombre
+    "Cool Winter":   (-1.00, -0.42, -0.58,  0.38),  # clairement froid
+    "Bright Winter": (-0.62,  0.12, -0.48,  0.42),  # froid à neutre + très vif
+    "True Winter":   (-0.80, -0.10, -0.82,  0.00),  # froid équilibré + sombre
 }
 
 
@@ -1716,7 +1732,7 @@ def main():
         layout="centered",
         initial_sidebar_state="auto",
     )
-    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+    st.html(MOBILE_CSS)
 
     # ---- Sidebar (visible on desktop) ----
     st.sidebar.header("PikoLab")
@@ -1907,8 +1923,8 @@ def main():
     if (!overlayCanvas) return;
     const r = video.getBoundingClientRect();
     const W = r.width|0, H = r.height|0;
-    overlayCanvas.style.top  = r.top  + pwin.scrollY + 'px';
-    overlayCanvas.style.left = r.left + pwin.scrollX + 'px';
+    overlayCanvas.style.top  = r.top  + 'px';
+    overlayCanvas.style.left = r.left + 'px';
     overlayCanvas.style.width  = W + 'px';
     overlayCanvas.style.height = H + 'px';
     if (overlayCanvas.width !== W || overlayCanvas.height !== H) {
