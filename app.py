@@ -1852,24 +1852,41 @@ def main():
         # ---- Question éclairage ----
         light_type = st.radio(
             "Éclairage au moment de la photo :",
-            ["Lumière naturelle (jour)", "Artificiel — pièce bien éclairée", "Artificiel — faible ou nuit"],
-            horizontal=True,
+            [
+                "Lumière naturelle (jour)",
+                "Artificiel — lumière blanche (LED, néon)",
+                "Artificiel — lumière jaune (ampoule, halogène)",
+                "Artificiel — faible ou nuit",
+                "Je ne sais pas",
+            ],
+            horizontal=False,
             key="chk_light_type",
             help=(
-                "La lumière naturelle est l'idéal pour la colorimétrie. "
-                "La lumière tungstène ajoute un cast jaune-orangé ; "
-                "le néon ajoute un cast bleu-vert — l'analyse sera moins précise."
+                "La lumière naturelle est l'idéal. "
+                "Lumière blanche (LED/néon) : cast bleu-vert léger. "
+                "Lumière jaune (tungstène/halogène) : cast chaud fort qui peut fausser le sous-ton. "
+                "Une feuille blanche permet de compenser dans tous les cas."
             ),
         )
         if light_type == "Artificiel — faible ou nuit":
             st.warning(
-                "Éclairage faible détecté. L'analyse colorimétrique est moins fiable en lumière artificielle. "
-                "Préférez une fenêtre bien éclairée ou ajoutez une feuille blanche comme référence."
+                "Éclairage faible : résultat peu fiable. "
+                "Préférez une fenêtre bien éclairée ou utilisez une feuille blanche comme référence."
             )
-        elif light_type == "Artificiel — pièce bien éclairée":
+        elif light_type == "Artificiel — lumière jaune (ampoule, halogène)":
+            st.warning(
+                "Lumière jaune détectée : cast chaud fort qui peut faire lire un teint neutre comme chaud. "
+                "La correction est atténuée pour éviter une inversion. Utilisez une feuille blanche pour plus de précision."
+            )
+        elif light_type == "Artificiel — lumière blanche (LED, néon)":
             st.caption(
-                "Conseil : placez-vous face à une fenêtre (sans soleil direct) pour un résultat plus fiable. "
-                "Une feuille blanche comme référence compense en partie le cast de lumière artificielle."
+                "Lumière blanche : cast bleu-vert léger. "
+                "Une feuille blanche comme référence améliore encore la précision."
+            )
+        elif light_type == "Je ne sais pas":
+            st.caption(
+                "Pas de problème — une correction intermédiaire sera appliquée. "
+                "Pour un meilleur résultat, approchez-vous d'une fenêtre."
             )
     else:
         light_type = "Lumière naturelle (jour)"
@@ -2200,12 +2217,14 @@ def main():
 
     progress.progress(40, text="Correction des couleurs...")
     _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
-    if _light == "Artificiel — faible ou nuit":
-        _wb_strength = 0.35   # Cast fort (tungstène) : correction partielle pour éviter l'inversion du sous-ton
-    elif _light == "Artificiel — pièce bien éclairée":
-        _wb_strength = 0.65   # Cast modéré : correction partielle
-    else:
-        _wb_strength = 1.0    # Lumière naturelle : correction complète
+    _WB_STRENGTH = {
+        "Lumière naturelle (jour)":                      1.0,   # cast négligeable, correction complète
+        "Artificiel — lumière blanche (LED, néon)":      0.75,  # cast bleu-vert léger
+        "Artificiel — lumière jaune (ampoule, halogène)": 0.35, # cast chaud fort → correction partielle
+        "Artificiel — faible ou nuit":                   0.35,  # conditions difficiles
+        "Je ne sais pas":                                0.55,  # compromis prudent
+    }
+    _wb_strength = _WB_STRENGTH.get(_light, 1.0)
 
     if wb_reference is not None:
         corrected = correct_wb_with_reference(image_rgb, wb_reference, strength=_wb_strength)
@@ -2337,17 +2356,17 @@ def main():
 
     has_makeup = st.session_state.get("chk_has_makeup", False)
     _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
-    _artificial_night = _light == "Artificiel — faible ou nuit"
-    _artificial_day   = _light == "Artificiel — pièce bien éclairée"
+    _bad_light  = _light in ("Artificiel — faible ou nuit", "Artificiel — lumière jaune (ampoule, halogène)")
+    _ok_light   = _light in ("Lumière naturelle (jour)",)
     if mode == "Demo":
         conf_text = "Demonstration"
-    elif _artificial_night:
-        conf_text = "Resultat a confirmer — lumiere insuffisante ou artificielle. Reprenez en lumiere naturelle."
-    elif has_makeup and _artificial_day:
-        conf_text = "Analyse avec maquillage + eclairage artificiel — precision reduite"
+    elif _bad_light and has_makeup:
+        conf_text = "Resultat peu fiable — maquillage + eclairage defavorable"
+    elif _bad_light:
+        conf_text = "Resultat a confirmer — eclairage defavorable. Reprenez en lumiere naturelle ou blanche."
     elif has_makeup:
         conf_text = "Analyse avec maquillage — resultats bases principalement sur le teint du cou"
-    elif _artificial_day:
+    elif not _ok_light:
         conf_text = "Resultat indicatif — eclairage artificiel. Une feuille blanche ameliore la precision."
     elif confidence >= 0.7:
         conf_text = "Resultat fiable"
