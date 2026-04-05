@@ -697,12 +697,21 @@ def detect_white_region(image_rgb):
     return None
 
 
-def correct_wb_with_reference(image_rgb, reference_rgb):
+def correct_wb_with_reference(image_rgb, reference_rgb, strength=1.0):
+    """White balance correction with adjustable strength.
+
+    strength=1.0 → full correction (natural light, reference perfectly reliable).
+    strength<1.0 → partial correction, interpolates between identity and full
+    correction. Useful under artificial light where the cast is strong and a
+    full correction would overcorrect skin tone (e.g. neutral-warm reads cold).
+    """
     gains = 255.0 / (np.array(reference_rgb) + 1e-6)
     gains = gains / gains.max()
+    # Interpolate: gains_eff = 1 + (gains - 1) * strength
+    gains_eff = 1.0 + (gains - 1.0) * strength
     corrected = image_rgb.astype(np.float32)
     for c in range(3):
-        corrected[:, :, c] *= gains[c]
+        corrected[:, :, c] *= gains_eff[c]
     return np.clip(corrected, 0, 255).astype(np.uint8)
 
 
@@ -2190,9 +2199,17 @@ def main():
     lip_px = int(np.count_nonzero(lip_mask))
 
     progress.progress(40, text="Correction des couleurs...")
+    _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
+    if _light == "Artificiel — faible ou nuit":
+        _wb_strength = 0.35   # Cast fort (tungstène) : correction partielle pour éviter l'inversion du sous-ton
+    elif _light == "Artificiel — pièce bien éclairée":
+        _wb_strength = 0.65   # Cast modéré : correction partielle
+    else:
+        _wb_strength = 1.0    # Lumière naturelle : correction complète
+
     if wb_reference is not None:
-        corrected = correct_wb_with_reference(image_rgb, wb_reference)
-        correction_method = "Feuille blanche"
+        corrected = correct_wb_with_reference(image_rgb, wb_reference, strength=_wb_strength)
+        correction_method = f"Feuille blanche ({int(_wb_strength*100)}%)"
     else:
         corrected = correct_exposure(image_rgb, skin_mask)
         correction_method = "Auto"
