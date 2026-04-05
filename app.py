@@ -1014,6 +1014,44 @@ def classify_season(scores, dominance_threshold):
     return best_name if best_name else f"True {base}"
 
 
+def classify_season_in_base(scores, base):
+    """Retourne la meilleure sous-saison dans une base donnée (Spring/Summer/Autumn/Winter).
+    Utilisé pour appliquer un override de base issu du consensus multi-agents
+    tout en gardant les scores pixel intacts (évite désynchro jauge/saison).
+    """
+    rules = SUBSEASON_RULES.get(base, [])
+    best_match = None
+    best_strength = -1.0
+
+    for sub_name, axis, direction in rules:
+        if axis is None:
+            continue
+        if not _in_bounds(sub_name, scores):
+            continue
+        sv = scores[axis]
+        strength = sv if direction == "high" else -sv
+        if strength > best_strength:
+            best_strength = strength
+            best_match = sub_name
+
+    if best_match:
+        return best_match
+
+    # Fallback : centroïde le plus proche dans cette base
+    point = np.array([scores["temperature"], scores["value"], scores["saturation"]])
+    best_name, best_dist = None, float("inf")
+    for sub_name, _, _ in rules:
+        centroid = SEASON_CENTROIDS.get(sub_name)
+        if centroid is None:
+            continue
+        penalty = 1.0 if _in_bounds(sub_name, scores) else 2.0
+        d = np.linalg.norm(point - np.array(centroid)) * penalty
+        if d < best_dist:
+            best_dist = d
+            best_name = sub_name
+    return best_name if best_name else f"True {base}"
+
+
 def classify_top3(scores):
     """
     Top 3 saisons par distance aux centroides, avec filtre par intervalles professionnels.
@@ -2368,9 +2406,20 @@ def main():
                 consensus_data = run_consensus_analysis(
                     corrected, season, confidence, gemini_api_key
                 )
-                # Ne pas overrider la saison : cela créerait une incohérence
-                # entre les jauges (basées sur les pixels) et la saison affichée.
-                # Le consensus s'affiche en bloc informatif séparé.
+                # Override si le consensus est majoritaire/unanime ET vote une base différente.
+                # On ré-exécute classify_season dans la base majoritaire pour garder
+                # les scores pixel intacts → les jauges restent cohérentes avec la saison.
+                _c_base  = consensus_data.get("consensus_base", "")
+                _c_agree = consensus_data.get("agreement_level", "desaccord")
+                _algo_base = season.split()[-1] if season else ""
+                if _c_base and _c_base != _algo_base and _c_agree in ("majorite", "unanimite"):
+                    season = classify_season_in_base(scores, _c_base)
+                    advice = SEASON_ADVICE.get(season, {})
+                    diagnostic = generate_personal_diagnostic(
+                        skin_stats, iris_stats, hair_info, lip_undertone,
+                        profile, season, advice, contrast,
+                    )
+                    consensus_data["overridden"] = True
             except Exception as exc:
                 st.warning(f"Validation multi-agents non disponible : {exc}")
 
