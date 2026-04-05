@@ -2230,41 +2230,57 @@ def main():
 
     progress.progress(40, text="Correction des couleurs...")
     _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
-    # Strength of Lab-space cast correction (can be higher than RGB — no nonlinearity risk)
+    # Strength of Lab-space cast correction.
+    # Empirically calibrated for yellow light using a known Soft Autumn reference:
+    # expected temp_score≈+0.18, measured≈-0.68 → error=+0.86 score → +6.9 b*
+    # With a typical tungsten cast of b*≈16, required strength ≈ 6.9/16 ≈ 0.43.
+    # Extra empirical b* offset for yellow light (residual after cast subtraction).
     _WB_STRENGTH = {
-        "Lumière naturelle (jour)":                       1.0,  # reference trustworthy
-        "Artificiel — lumière blanche (LED, néon)":       0.85, # mild blue-green cast
-        "Artificiel — lumière jaune (ampoule, halogène)": 0.88, # strong warm cast, Lab correction handles it
-        "Je ne sais pas":                                 0.70, # conservative fallback
+        "Lumière naturelle (jour)":                       1.0,
+        "Artificiel — lumière blanche (LED, néon)":       0.55,
+        "Artificiel — lumière jaune (ampoule, halogène)": 0.43,
+        "Je ne sais pas":                                 0.35,
     }
     _wb_strength = _WB_STRENGTH.get(_light, 1.0)
+    # Residual warm offset added back for yellow light (tungsten always under-corrects
+    # slightly because skin absorbs light differently from paper)
+    _WB_WARM_OFFSET = {
+        "Artificiel — lumière jaune (ampoule, halogène)": 2.5,
+        "Je ne sais pas":                                 1.0,
+    }
+    _wb_warm_offset = _WB_WARM_OFFSET.get(_light, 0.0)
 
     if wb_reference is not None:
-        # RGB correction → for visual output, iris and hair analysis only
+        # exposure_corrected: only exposure fix, NO WB → used for skin/neck Lab analysis
+        # (WB correction is applied directly in Lab space below, avoiding RGB nonlinearity)
+        exposure_corrected = correct_exposure(image_rgb, skin_mask)
+        # corrected: full RGB WB → used for iris, hair, lip, display only
         corrected = correct_wb_with_reference(image_rgb, wb_reference)
-        # Lab cast → used for skin/neck colorimetric analysis
+        # Measure the illuminant cast in Lab space from the white reference
         _wb_a_cast, _wb_b_cast = compute_wb_lab_cast(wb_reference)
         correction_method = f"Feuille blanche (Lab {int(_wb_strength*100)}%)"
     else:
-        corrected = correct_exposure(image_rgb, skin_mask)
+        exposure_corrected = correct_exposure(image_rgb, skin_mask)
+        corrected = exposure_corrected
         _wb_a_cast, _wb_b_cast = 0.0, 0.0
         correction_method = "Auto"
 
     progress.progress(55, text="Analyse colorimetrique peau, cou et iris...")
-    skin_pixels_rgb = extract_pixels(corrected, skin_mask)
-    neck_pixels_rgb = extract_pixels(corrected, neck_mask)
+    # Skin and neck: extracted from exposure-only image, then Lab cast correction applied
+    skin_pixels_rgb = extract_pixels(exposure_corrected, skin_mask)
+    neck_pixels_rgb = extract_pixels(exposure_corrected, neck_mask)
     has_makeup = st.session_state.get("chk_has_makeup", False)
 
     # --- Stats robustes séparées visage / cou ---
-    # Lab-space cast correction applied here (linear, no RGB nonlinearity)
+    # Lab cast correction: linear subtraction on Lab values, then warm residual offset
     face_lab = apply_lab_cast_correction(
-        pixels_to_lab(skin_pixels_rgb), _wb_a_cast, _wb_b_cast, _wb_strength
+        pixels_to_lab(skin_pixels_rgb), _wb_a_cast, _wb_b_cast - _wb_warm_offset, _wb_strength
     )
     face_stats = compute_skin_stats_robust(face_lab)
 
     _neck_lab_raw = pixels_to_lab(neck_pixels_rgb) if len(neck_pixels_rgb) >= 30 else None
     neck_lab_pixels = apply_lab_cast_correction(
-        _neck_lab_raw, _wb_a_cast, _wb_b_cast, _wb_strength
+        _neck_lab_raw, _wb_a_cast, _wb_b_cast - _wb_warm_offset, _wb_strength
     ) if _neck_lab_raw is not None else None
     neck_stats_raw = compute_skin_stats_robust(neck_lab_pixels) if neck_lab_pixels is not None else None
 
