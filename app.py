@@ -1755,8 +1755,34 @@ def main():
 
     has_sheet = False
 
+    # ---- Questions pré-capture (tous modes sauf Demo) ----
+    if mode != "Demo":
+        st.markdown("**Avant la photo :**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.checkbox(
+                "Maquillage",
+                key="chk_has_makeup",
+                value=False,
+                help="Fond de teint, blush ou contouring — le cou sera utilisé comme référence principale de teint",
+            )
+        with col2:
+            st.checkbox(
+                "Sourcils naturels",
+                key="chk_natural_eyebrows",
+                value=True,
+                help="Non teints, non tatoués, non redessinés",
+            )
+        with col3:
+            st.checkbox(
+                "Cheveux attachés",
+                key="chk_hair_tied",
+                value=False,
+                help="Dégager le visage et le cou améliore la précision de l'analyse",
+            )
+
     if mode == "Appareil photo":
-        st.caption("Sans maquillage · Lumiere naturelle · Visage de face · Feuille A4 blanche pliée en 2 à côté du visage")
+        st.caption("Lumiere naturelle · Visage de face · Feuille A4 blanche pliée en 2 à côté du visage")
 
         # ---- Script de capture automatique (iframe via components.html) ----
         components.html("""
@@ -1997,7 +2023,7 @@ def main():
     neck_pixels_rgb = extract_pixels(corrected, neck_mask)
     # Si maquillage détecté : le cou devient la référence principale (65 %)
     # Sinon : fusion joues 60 % + cou 40 %
-    has_makeup = not st.session_state.get("chk_no_makeup", True)
+    has_makeup = st.session_state.get("chk_has_makeup", False)
     neck_ratio = 1.86 if has_makeup else 0.67  # neck_target = ratio * n_cheek
     if len(neck_pixels_rgb) >= 30:
         n_cheek = len(skin_pixels_rgb)
@@ -2082,7 +2108,7 @@ def main():
     c1 = season_colors[0]
     c2 = season_colors[1] if len(season_colors) > 1 else c1
 
-    has_makeup = not st.session_state.get("chk_no_makeup", True)
+    has_makeup = st.session_state.get("chk_has_makeup", False)
     if mode == "Demo":
         conf_text = "Demonstration"
     elif has_makeup:
