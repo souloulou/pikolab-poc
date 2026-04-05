@@ -697,22 +697,41 @@ def detect_white_region(image_rgb):
     return None
 
 
-def correct_wb_with_reference(image_rgb, reference_rgb, strength=1.0):
-    """White balance correction with adjustable strength.
-
-    strength=1.0 → full correction (natural light, reference perfectly reliable).
-    strength<1.0 → partial correction, interpolates between identity and full
-    correction. Useful under artificial light where the cast is strong and a
-    full correction would overcorrect skin tone (e.g. neutral-warm reads cold).
-    """
+def correct_wb_with_reference(image_rgb, reference_rgb):
+    """Full RGB white balance correction (for visual output and iris/hair analysis)."""
     gains = 255.0 / (np.array(reference_rgb) + 1e-6)
     gains = gains / gains.max()
-    # Interpolate: gains_eff = 1 + (gains - 1) * strength
-    gains_eff = 1.0 + (gains - 1.0) * strength
     corrected = image_rgb.astype(np.float32)
     for c in range(3):
-        corrected[:, :, c] *= gains_eff[c]
+        corrected[:, :, c] *= gains[c]
     return np.clip(corrected, 0, 255).astype(np.uint8)
+
+
+def compute_wb_lab_cast(reference_rgb):
+    """Measure the chromatic cast (a*, b*) of the white reference in Lab space.
+
+    A true white paper under D65 has a*≈0, b*≈2 (slight warm due to optical
+    brighteners). Under tungsten it might read b*≈18. The cast is the deviation
+    from the neutral-paper baseline.
+    Returns (a_cast, b_cast) in skimage Lab units.
+    """
+    ref = np.array([reference_rgb[:3]], dtype=np.uint8)
+    ref_lab = pixels_to_lab(ref)[0]
+    return float(ref_lab[1] - 0.0), float(ref_lab[2] - 2.0)
+
+
+def apply_lab_cast_correction(lab_pixels, a_cast, b_cast, strength=1.0):
+    """Subtract the illuminant chromatic cast from Lab pixels.
+
+    Works directly in Lab space (linear and predictable — no RGB non-linearity).
+    strength=1.0 removes the full measured cast; lower values remove less.
+    """
+    if len(lab_pixels) == 0:
+        return lab_pixels
+    corrected = lab_pixels.copy()
+    corrected[:, 1] -= a_cast * strength
+    corrected[:, 2] -= b_cast * strength
+    return corrected
 
 
 def correct_exposure(image_rgb, skin_mask):
@@ -2211,19 +2230,24 @@ def main():
 
     progress.progress(40, text="Correction des couleurs...")
     _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
+    # Strength of Lab-space cast correction (can be higher than RGB — no nonlinearity risk)
     _WB_STRENGTH = {
-        "Lumière naturelle (jour)":                      1.0,   # cast négligeable, correction complète
-        "Artificiel — lumière blanche (LED, néon)":      0.75,  # cast bleu-vert léger
-        "Artificiel — lumière jaune (ampoule, halogène)": 0.35, # cast chaud fort → correction partielle
-        "Je ne sais pas":                                0.55,  # compromis prudent
+        "Lumière naturelle (jour)":                       1.0,  # reference trustworthy
+        "Artificiel — lumière blanche (LED, néon)":       0.85, # mild blue-green cast
+        "Artificiel — lumière jaune (ampoule, halogène)": 0.88, # strong warm cast, Lab correction handles it
+        "Je ne sais pas":                                 0.70, # conservative fallback
     }
     _wb_strength = _WB_STRENGTH.get(_light, 1.0)
 
     if wb_reference is not None:
-        corrected = correct_wb_with_reference(image_rgb, wb_reference, strength=_wb_strength)
-        correction_method = f"Feuille blanche ({int(_wb_strength*100)}%)"
+        # RGB correction → for visual output, iris and hair analysis only
+        corrected = correct_wb_with_reference(image_rgb, wb_reference)
+        # Lab cast → used for skin/neck colorimetric analysis
+        _wb_a_cast, _wb_b_cast = compute_wb_lab_cast(wb_reference)
+        correction_method = f"Feuille blanche (Lab {int(_wb_strength*100)}%)"
     else:
         corrected = correct_exposure(image_rgb, skin_mask)
+        _wb_a_cast, _wb_b_cast = 0.0, 0.0
         correction_method = "Auto"
 
     progress.progress(55, text="Analyse colorimetrique peau, cou et iris...")
@@ -2232,10 +2256,16 @@ def main():
     has_makeup = st.session_state.get("chk_has_makeup", False)
 
     # --- Stats robustes séparées visage / cou ---
-    face_lab = pixels_to_lab(skin_pixels_rgb)
+    # Lab-space cast correction applied here (linear, no RGB nonlinearity)
+    face_lab = apply_lab_cast_correction(
+        pixels_to_lab(skin_pixels_rgb), _wb_a_cast, _wb_b_cast, _wb_strength
+    )
     face_stats = compute_skin_stats_robust(face_lab)
 
-    neck_lab_pixels = pixels_to_lab(neck_pixels_rgb) if len(neck_pixels_rgb) >= 30 else None
+    _neck_lab_raw = pixels_to_lab(neck_pixels_rgb) if len(neck_pixels_rgb) >= 30 else None
+    neck_lab_pixels = apply_lab_cast_correction(
+        _neck_lab_raw, _wb_a_cast, _wb_b_cast, _wb_strength
+    ) if _neck_lab_raw is not None else None
     neck_stats_raw = compute_skin_stats_robust(neck_lab_pixels) if neck_lab_pixels is not None else None
 
     if neck_stats_raw is not None:
