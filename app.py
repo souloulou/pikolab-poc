@@ -2478,26 +2478,23 @@ def main():
         )
 
         # --- Analyse overtone visage vs cou ---
-        _ot = ctx.get("overtone_delta", 0.0)
-        _nb = ctx.get("neck_b")
-        _fb = ctx.get("face_b")
+        _nb = neck_stats_raw["b"] if neck_stats_raw is not None else None
         if _nb is not None:
-            if abs(_ot) >= 2.5:
-                if _ot > 0:
+            if abs(overtone_delta) >= 2.5:
+                if overtone_delta > 0:
                     st.info(
                         f"**Overtone chaud détecté** : le visage est plus jaune/doré "
-                        f"que le cou (Δb* = +{_ot:.1f}). Cause possible : exposition solaire, "
+                        f"que le cou (Δb* = +{overtone_delta:.1f}). Cause possible : exposition solaire, "
                         f"rougeurs, fond de teint chaud. Le sous-ton mesuré s'appuie sur le cou."
                     )
                 else:
                     st.info(
                         f"**Overtone froid détecté** : le visage est plus rosé/bleuté "
-                        f"que le cou (Δb* = {_ot:.1f}). Cause possible : rougeurs, maquillage "
+                        f"que le cou (Δb* = {overtone_delta:.1f}). Cause possible : rougeurs, maquillage "
                         f"froid, lumière. Le sous-ton mesuré s'appuie sur le cou."
                     )
-        _imp = ctx.get("imperfection_note")
-        if _imp:
-            st.caption(f"Signature des imperfections : {_imp}")
+        if imperfection_note:
+            st.caption(f"Signature des imperfections : {imperfection_note}")
 
         st.markdown("---")
         st.markdown("### Correspondance saisons")
