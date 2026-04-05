@@ -822,9 +822,15 @@ def compute_contrast(skin_stats, iris_stats):
     return float(np.clip((l_diff / 50.0 + c_diff / 30.0) / 2.0, 0, 1))
 
 
-def compute_professional_profile(scores, contrast):
-    """Human-readable 4-dimension profile for stylists."""
-    t = scores["temperature"]
+def compute_professional_profile(scores, contrast, skin_temp=None):
+    """Human-readable 4-dimension profile for stylists.
+
+    skin_temp: temperature score computed from skin pixels only (not iris-blended).
+    Used for the undertone display so that cool eye color doesn't make a warm
+    skin person appear cold on the gauge.
+    """
+    # Undertone gauge: skin-only temperature when available
+    t = float(np.clip(skin_temp, -1, 1)) if skin_temp is not None else scores["temperature"]
     v = scores["value"]
     s = scores["saturation"]
 
@@ -926,13 +932,19 @@ def classify_season(scores, dominance_threshold):
     if best_strength > dominance_threshold and best_match is not None:
         return best_match
 
-    # Fallback : première sous-saison valide dans les bornes, sinon True <Base>
-    for sub_name, axis, _ in rules:
-        if axis is None:
-            return sub_name  # c'est la True <base>
-        if _in_bounds(sub_name, scores):
-            return sub_name
-    return f"True {base}"
+    # Fallback : sous-saison la plus proche par centroïde (bornes respectées en priorité)
+    point = np.array([scores["temperature"], scores["value"], scores["saturation"]])
+    best_name, best_dist = None, float("inf")
+    for sub_name, _, _ in rules:
+        centroid = SEASON_CENTROIDS.get(sub_name)
+        if centroid is None:
+            continue
+        penalty = 1.0 if _in_bounds(sub_name, scores) else 2.0
+        d = np.linalg.norm(point - np.array(centroid)) * penalty
+        if d < best_dist:
+            best_dist = d
+            best_name = sub_name
+    return best_name if best_name else f"True {base}"
 
 
 def classify_top3(scores):
@@ -1808,7 +1820,7 @@ def main():
   if (pwin._pikolabRunning) return;
   pwin._pikolabRunning = true;
 
-  const STABLE_NEEDED  = 8;
+  const STABLE_NEEDED  = 20;  // 6s à 300ms/frame
   const SKIN_THRESHOLD = 0.07;
   let stableCount = 0, captured = false;
 
@@ -2062,7 +2074,11 @@ def main():
     progress.progress(85, text="Classification saisonniere...")
     scores = compute_scores(skin_stats, iris_stats, params)
     contrast = compute_contrast(skin_stats, iris_stats)
-    profile = compute_professional_profile(scores, contrast)
+    # Skin-only temperature: used for undertone gauge display (iris excluded)
+    skin_temp_norm = float(np.clip(
+        (skin_stats["b"] - params["temp_center"]) / params["temp_scale"], -1, 1
+    ))
+    profile = compute_professional_profile(scores, contrast, skin_temp=skin_temp_norm)
     season = classify_season(scores, dominance_thresh)
     top3 = classify_top3(scores)
     confidence = compute_confidence(scores)
@@ -2227,14 +2243,19 @@ def main():
     with tabs[tab_idx]:
         st.markdown("### Votre profil en 4 dimensions")
         for label, raw, vmin, vmax, left, right in [
-            (f"Sous-ton : {profile['undertone']}", profile["raw_undertone"], -1, 1, "Froid", "Chaud"),
+            (f"Sous-ton peau : {profile['undertone']}", profile["raw_undertone"], -1, 1, "Froid", "Chaud"),
             (f"Valeur : {profile['depth']}", profile["raw_depth"], -1, 1, "Fonce", "Clair"),
             (f"Chroma : {profile['chroma']}", profile["raw_chroma"], -1, 1, "Doux", "Vif"),
-            (f"Contraste : {profile['contrast']}", profile["raw_contrast"], 0, 1, "Bas", "Eleve"),
+            (f"Contraste peau/yeux : {profile['contrast']}", profile["raw_contrast"], 0, 1, "Bas", "Eleve"),
         ]:
             fig = render_gauge(raw, vmin, vmax, left, right, label)
             st.pyplot(fig)
             plt.close(fig)
+        st.caption(
+            "Le **sous-ton peau** est mesuré uniquement sur la peau (pas les yeux). "
+            "La **valeur** indique la clarté globale du coloring — une valeur sombre "
+            "('Foncé') correspond aux saisons 'Deep', indépendamment du contraste peau/yeux."
+        )
 
         st.markdown("---")
         st.markdown("### Correspondance saisons")
