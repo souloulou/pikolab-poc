@@ -15,7 +15,7 @@ from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python.vision import FaceLandmarker, FaceLandmarkerOptions
 import cv2
 import numpy as np
-from skimage.color import rgb2lab
+from skimage.color import rgb2lab, lab2rgb
 from sklearn.cluster import KMeans
 import matplotlib
 matplotlib.use("Agg")
@@ -717,7 +717,9 @@ def compute_wb_lab_cast(reference_rgb):
     """
     ref = np.array([reference_rgb[:3]], dtype=np.uint8)
     ref_lab = pixels_to_lab(ref)[0]
-    return float(ref_lab[1] - 0.0), float(ref_lab[2] - 2.0)
+    # Only correct warming casts: if reference already reads neutral or cool,
+    # don't add warmth by overcorrecting (clamp to 0).
+    return float(ref_lab[1]), max(0.0, float(ref_lab[2] - 2.0))
 
 
 def apply_lab_cast_correction(lab_pixels, a_cast, b_cast, strength=1.0):
@@ -1902,8 +1904,8 @@ def main():
             st.checkbox(
                 "Feuille blanche",
                 key="chk_use_sheet",
-                value=False,
-                help="Feuille A4 pliée en 2, tenue à plat à côté du visage — améliore la précision du sous-ton",
+                value=True,
+                help="Feuille A4 pliée en 2, tenue à plat à côté du visage — nécessaire pour corriger le filtre couleur de la caméra",
             )
 
         # ---- Question éclairage ----
@@ -2216,17 +2218,40 @@ def main():
         return
 
     # ---- Detection feuille blanche — feedback immediat ----
+    # Reset override when image changes (rough fingerprint: shape + first pixel)
+    _img_sig = f"{image_rgb.shape}_{image_rgb[0, 0].tolist()}"
+    if st.session_state.get("_last_img_sig") != _img_sig:
+        st.session_state.pop("no_sheet_override", None)
+        st.session_state["_last_img_sig"] = _img_sig
+
     wb_reference = None
     if mode != "Demo":
         wb_reference = detect_white_region(image_rgb)
         if wb_reference is not None:
             has_sheet = True
-            st.success("✅ Feuille blanche détectée — calibration couleur activée.")
+            a_cast, b_cast = compute_wb_lab_cast(wb_reference)
+            st.success(f"✅ Feuille blanche détectée — cast corrigé (a*{a_cast:+.1f}, b*{b_cast:+.1f})")
+            # Preview Lab-space : même correction que l'analyse (pas RGB gains)
+            _img_lab = rgb2lab(image_rgb / 255.0)
+            _img_lab_corr = _img_lab.copy()
+            _img_lab_corr[:, :, 1] -= a_cast
+            _img_lab_corr[:, :, 2] -= b_cast
+            corrected_preview = np.clip(lab2rgb(_img_lab_corr) * 255, 0, 255).astype(np.uint8)
+            _pc1, _pc2 = st.columns(2)
+            _pc1.image(image_rgb, caption="Photo originale", use_container_width=True)
+            _pc2.image(corrected_preview, caption="Après correction couleur", use_container_width=True)
         else:
-            st.caption(
-                "Aucune feuille détectée — tenez une feuille A4 pliée en 2 "
-                "bien éclairée à côté du visage pour une analyse plus précise."
+            has_sheet = False
+            st.warning(
+                "⚠️ Aucune feuille blanche détectée. "
+                "Sans référence neutre, un filtre coloré de votre caméra peut fausser le sous-ton. "
+                "Reprenez la photo avec une feuille A4 blanche tenue à côté du visage."
             )
+            if not st.session_state.get("no_sheet_override"):
+                if st.button("Analyser quand même (résultat moins fiable)", type="secondary"):
+                    st.session_state["no_sheet_override"] = True
+                    st.rerun()
+                return
 
     # ---- Pipeline with progress ----
     hero_placeholder.empty()
@@ -2415,12 +2440,6 @@ def main():
                 if _c_base and _c_base != _algo_base and _c_agree in ("majorite", "unanimite"):
                     season = classify_season_in_base(scores, _c_base)
                     advice = SEASON_ADVICE.get(season, {})
-                    # Clamp skin_temp_norm to the temp bounds of the overridden season
-                    # so the undertone gauge is coherent with the displayed season.
-                    _bounds = SEASON_BOUNDS.get(season)
-                    if _bounds is not None:
-                        _t_min, _t_max = _bounds[0], _bounds[1]
-                        skin_temp_norm = float(np.clip(skin_temp_norm, _t_min, _t_max))
                     profile = compute_professional_profile(scores, contrast, skin_temp=skin_temp_norm)
                     diagnostic = generate_personal_diagnostic(
                         skin_stats, iris_stats, hair_info, lip_undertone,
