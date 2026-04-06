@@ -6,6 +6,7 @@ Pipeline : MediaPipe Face Mesh -> masquage peau/iris -> correction couleur -> CI
 
 import os
 import urllib.request
+from datetime import datetime
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -1878,7 +1879,7 @@ def main():
     # ---- Questions pré-capture (tous modes sauf Demo) ----
     if mode != "Demo":
         st.markdown("**Avant la photo :**")
-        col1, col2, col3, col4 = st.columns(4)
+        col1, col2, col3 = st.columns(3)
         with col1:
             st.checkbox(
                 "Maquillage",
@@ -1895,12 +1896,27 @@ def main():
             )
         with col3:
             st.checkbox(
+                "Cheveux naturels",
+                key="chk_natural_hair",
+                value=True,
+                help="Couleur non traitée (ni colorée, ni décolorée, ni balayage). Si vos cheveux sont colorés, l'analyse de leur teinte sera ignorée.",
+            )
+        col4, col5, col6 = st.columns(3)
+        with col4:
+            st.checkbox(
                 "Cheveux attachés",
                 key="chk_hair_tied",
                 value=False,
                 help="Dégager le visage et le cou améliore la précision de l'analyse",
             )
-        with col4:
+        with col5:
+            st.checkbox(
+                "Sans lentilles colorées",
+                key="chk_no_colored_contacts",
+                value=True,
+                help="Les lentilles de couleur faussent l'analyse de l'iris. Retirez-les ou cochez cette case uniquement si vos lentilles sont transparentes.",
+            )
+        with col6:
             st.checkbox(
                 "Feuille blanche",
                 key="chk_use_sheet",
@@ -1926,7 +1942,27 @@ def main():
                 "Une feuille blanche permet de compenser dans tous les cas."
             ),
         )
-        if light_type == "Artificiel — lumière jaune (ampoule, halogène)":
+        if light_type == "Lumière naturelle (jour)":
+            _now = datetime.now()
+            _h = _now.hour + _now.minute / 60
+            _month = _now.month
+            if _month in (5, 6, 7, 8):           # Été
+                _ok_start, _ok_end = 10, 16
+                _season_label = "en été"
+            elif _month in (11, 12, 1, 2):        # Hiver
+                _ok_start, _ok_end = 11, 14
+                _season_label = "en hiver"
+            else:                                  # Printemps / Automne
+                _ok_start, _ok_end = 10, 15
+                _season_label = "au printemps/automne"
+            if not (_ok_start <= _h <= _ok_end):
+                st.warning(
+                    f"⚠️ Il est {_now.strftime('%Hh%M')} — en dehors de la plage recommandée "
+                    f"({_ok_start}h–{_ok_end}h {_season_label}). "
+                    "La lumière est trop basse et trop chaude, ce qui peut fausser le sous-ton. "
+                    "Préférez une photo près d'une fenêtre exposée au nord, ou revenez dans la plage horaire."
+                )
+        elif light_type == "Artificiel — lumière jaune (ampoule, halogène)":
             st.warning(
                 "Lumière jaune détectée : cast chaud fort qui peut faire lire un teint neutre comme chaud. "
                 "La correction est atténuée pour éviter une inversion. Utilisez une feuille blanche pour plus de précision."
@@ -2380,13 +2416,15 @@ def main():
             elif a_blem > 6 and b_blem > 10:
                 imperfection_note = "taches chauds-rosées → signal neutre-chaud"
 
+    no_colored_contacts = st.session_state.get("chk_no_colored_contacts", True)
     iris_pixels_rgb = extract_pixels(corrected, iris_mask)
-    iris_stats = extract_iris_dominant(iris_pixels_rgb) if len(iris_pixels_rgb) > 0 else None
+    iris_stats = extract_iris_dominant(iris_pixels_rgb) if (len(iris_pixels_rgb) > 0 and no_colored_contacts) else None
 
     progress.progress(70, text="Analyse cheveux et levres...")
+    natural_hair = st.session_state.get("chk_natural_hair", True)
     hair_pixels = extract_pixels(corrected, hair_mask)
     hair_lab = pixels_to_lab(hair_pixels)
-    hair_stats = compute_skin_stats(hair_lab) if len(hair_lab) > 0 else None
+    hair_stats = compute_skin_stats(hair_lab) if len(hair_lab) > 0 and natural_hair else None
     hair_info = classify_hair_color(hair_stats)
 
     lip_pixels = extract_pixels(corrected, lip_mask)
