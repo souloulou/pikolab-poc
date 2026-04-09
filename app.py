@@ -2727,6 +2727,12 @@ def main():
         _skin = _ctx.get("skin_stats")
         if _skin:
             import json as _json
+            import base64 as _b64
+            import qrcode as _qr
+            from io import BytesIO as _BytesIO
+
+            SCAN_COULEUR_URL = "https://scan-couleur.vercel.app"
+
             _piko_profile = {
                 "version": 1,
                 "season": _ctx["season"],
@@ -2744,13 +2750,33 @@ def main():
                     "contrast": _ctx["profile"]["contrast"],
                 },
             }
-            st.download_button(
-                "📲 Exporter mon profil vers Scan Couleur",
-                data=_json.dumps(_piko_profile, ensure_ascii=False, indent=2),
-                file_name=f"pikolab_profil_{_ctx['season'].lower().replace(' ', '_')}.json",
-                mime="application/json",
-                use_container_width=True,
-            )
+            _profile_b64 = _b64.urlsafe_b64encode(
+                _json.dumps(_piko_profile, ensure_ascii=False).encode()
+            ).decode()
+            _deep_link = f"{SCAN_COULEUR_URL}/profil?piko={_profile_b64}"
+
+            st.markdown("#### Utiliser mon profil dans Scan Couleur")
+            st.caption("Ouvrez ce lien sur votre téléphone pour importer automatiquement votre profil.")
+
+            col_link, col_qr = st.columns([2, 1])
+            with col_link:
+                st.link_button(
+                    "📲 Ouvrir Scan Couleur avec mon profil",
+                    _deep_link,
+                    use_container_width=True,
+                )
+                st.download_button(
+                    "💾 Télécharger le profil (.json)",
+                    data=_json.dumps(_piko_profile, ensure_ascii=False, indent=2),
+                    file_name=f"pikolab_profil_{_ctx['season'].lower().replace(' ', '_')}.json",
+                    mime="application/json",
+                    use_container_width=True,
+                )
+            with col_qr:
+                _qr_img = _qr.make(_deep_link)
+                _buf = _BytesIO()
+                _qr_img.save(_buf, format="PNG")
+                st.image(_buf.getvalue(), caption="Scanner avec votre téléphone", use_container_width=True)
 
         # CTA Coach IA
         if st.button("💬 Parler a Iris, votre coach styliste", type="primary", use_container_width=True):
