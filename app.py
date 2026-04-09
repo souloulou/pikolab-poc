@@ -2360,36 +2360,40 @@ def main():
     progress.progress(40, text="Correction des couleurs...")
     _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
 
+    # Calibration empirique : la feuille mesure 100% du cast de l'illuminant,
+    # mais la peau ne nécessite qu'une correction partielle (elle n'est pas un réflecteur neutre).
+    # Calibré sur référence Soft Autumn connue sous tungstène :
+    # cast mesuré ≈ b*+16, correction nécessaire ≈ 5.8 → strength ≈ 0.43.
+    # Le warm_offset compense le résidu après correction partielle.
+    _WB_STRENGTH = {
+        "Lumière naturelle (jour)":                       1.0,
+        "Artificiel — lumière blanche (LED, néon)":       0.55,
+        "Artificiel — lumière jaune (ampoule, halogène)": 0.43,
+        "Je ne sais pas":                                 0.35,
+    }
+    _WB_WARM_OFFSET = {
+        "Artificiel — lumière jaune (ampoule, halogène)": 2.5,
+        "Je ne sais pas":                                 1.0,
+    }
+    _wb_strength = _WB_STRENGTH.get(_light, 1.0)
+    _wb_warm_offset = _WB_WARM_OFFSET.get(_light, 0.0)
+
     if wb_reference is not None:
-        # Feuille blanche détectée → correction totale par la mesure réelle de l'illuminant.
-        # La feuille capture le cast exact (mélange jaune + lumière naturelle + tout autre source)
-        # sans hypothèse sur le type d'éclairage. Correction Von Kries à 100% en espace Lab.
-        # Le warm_offset empirique est supprimé : il compensait une correction incomplète,
-        # inutile ici puisque la correction est totale.
+        # Feuille blanche détectée → mesure réelle du cast de l'illuminant.
+        # On applique la correction calibrée (strength < 1.0) car la peau absorbe
+        # la lumière différemment du papier blanc : une correction 100% sur-corrigerait
+        # et ferait lire un teint chaud comme froid.
         exposure_corrected = correct_exposure(image_rgb, skin_mask)
         corrected = correct_wb_with_reference(image_rgb, wb_reference)
         _wb_a_cast, _wb_b_cast = compute_wb_lab_cast(wb_reference)
-        _wb_strength = 1.0
-        _wb_warm_offset = 0.0
-        correction_method = "Feuille blanche (correction totale)"
+        correction_method = f"Feuille blanche ({int(_wb_strength*100)}% calibré)"
     else:
-        # Pas de feuille → estimation d'après le type d'éclairage déclaré.
-        # Correction partielle et prudente pour éviter une sur-correction.
-        _WB_STRENGTH = {
-            "Lumière naturelle (jour)":                       1.0,
-            "Artificiel — lumière blanche (LED, néon)":       0.55,
-            "Artificiel — lumière jaune (ampoule, halogène)": 0.43,
-            "Je ne sais pas":                                 0.35,
-        }
-        _WB_WARM_OFFSET = {
-            "Artificiel — lumière jaune (ampoule, halogène)": 2.5,
-            "Je ne sais pas":                                 1.0,
-        }
-        _wb_strength = _WB_STRENGTH.get(_light, 1.0)
-        _wb_warm_offset = _WB_WARM_OFFSET.get(_light, 0.0)
+        # Pas de feuille → aucune mesure de cast, correction désactivée.
+        # Le temp_center adaptatif (selon éclairage déclaré) compense la dérive.
         exposure_corrected = correct_exposure(image_rgb, skin_mask)
         corrected = exposure_corrected
         _wb_a_cast, _wb_b_cast = 0.0, 0.0
+        _wb_warm_offset = 0.0  # sans référence, l'offset n'a pas de sens
         correction_method = f"Estimation ({_light.split('—')[-1].strip() if '—' in _light else _light})"
 
     progress.progress(55, text="Analyse colorimetrique peau, cou et iris...")
