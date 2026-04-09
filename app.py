@@ -1710,6 +1710,24 @@ def load_image(uploaded_file):
     return img
 
 
+PWA_HEAD = """
+<link rel="manifest" href="/app/static/manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PikoLab">
+<meta name="theme-color" content="#1c1917">
+<link rel="apple-touch-icon" href="/app/static/icon-192.png">
+<script>
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/app/static/sw.js', { scope: '/app/static/' })
+        .catch(function() {});
+    });
+  }
+</script>
+"""
+
 MOBILE_CSS = "<style>\n" \
     "/* Hide Streamlit auto-generated page navigation */\n" \
     "[data-testid='stSidebarNav'] { display: none !important; }\n" \
@@ -1802,7 +1820,7 @@ def main():
         layout="centered",
         initial_sidebar_state="auto",
     )
-    st.markdown(MOBILE_CSS, unsafe_allow_html=True)
+    st.markdown(MOBILE_CSS + PWA_HEAD, unsafe_allow_html=True)
 
     # ---- Sidebar (visible on desktop) ----
     st.sidebar.header("PikoLab")

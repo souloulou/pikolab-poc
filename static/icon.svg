@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="96" fill="#1c1917"/>
+  <!-- Palette de couleurs en arc -->
+  <circle cx="256" cy="280" r="130" fill="none" stroke="#fafaf9" stroke-width="28" stroke-dasharray="204 408" stroke-dashoffset="-102"/>
+  <!-- Cercles couleurs saisons -->
+  <circle cx="148" cy="220" r="32" fill="#e8a87c"/>
+  <circle cx="210" cy="168" r="32" fill="#c7b89c"/>
+  <circle cx="285" cy="155" r="32" fill="#a0bdc4"/>
+  <circle cx="355" cy="192" r="32" fill="#8b6f6f"/>
+  <!-- Point central pinceau -->
+  <circle cx="256" cy="280" r="18" fill="#fafaf9"/>
+  <!-- Lettres PL -->
+  <text x="256" y="420" font-family="Georgia, serif" font-size="88" font-weight="bold" text-anchor="middle" fill="#fafaf9" letter-spacing="-4">PL</text>
+</svg>

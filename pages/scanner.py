@@ -28,7 +28,12 @@ st.set_page_config(
 )
 
 st.markdown(
-    "<style>[data-testid='stSidebarNav'] { display: none !important; }</style>",
+    "<style>[data-testid='stSidebarNav'] { display: none !important; }</style>"
+    "<link rel='manifest' href='/app/static/manifest.json'>"
+    "<meta name='apple-mobile-web-app-capable' content='yes'>"
+    "<meta name='apple-mobile-web-app-title' content='PikoLab'>"
+    "<meta name='theme-color' content='#1c1917'>"
+    "<link rel='apple-touch-icon' href='/app/static/icon-192.png'>",
     unsafe_allow_html=True,
 )
 st.sidebar.header("PikoLab")
