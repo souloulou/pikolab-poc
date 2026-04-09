@@ -892,31 +892,6 @@ def compute_contrast(skin_stats, iris_stats):
     return float(np.clip((l_diff / 50.0 + c_diff / 30.0) / 2.0, 0, 1))
 
 
-def profile_from_season(season, scores, contrast, skin_temp=None):
-    """Profil 4D personnalisé, cohérent avec la saison classifiée.
-
-    Les valeurs mesurées sont conservées (personnalisation réelle) mais contraintes
-    aux bornes SEASON_BOUNDS de la saison. Si la mesure est dans les bornes → valeur
-    exacte. Si elle a 'snappé' → ramenée à la frontière de la saison.
-    Saturation et contraste : toujours issus de la mesure (pas de bornes par saison).
-    """
-    bounds = SEASON_BOUNDS.get(season)
-    if bounds is None:
-        return compute_professional_profile(scores, contrast, skin_temp=skin_temp)
-
-    import numpy as _np
-    t_min, t_max, v_min, v_max = bounds
-
-    raw_t = float(_np.clip(skin_temp if skin_temp is not None else scores["temperature"], -1, 1))
-    clamped_scores = {
-        "temperature": float(_np.clip(scores["temperature"], t_min, t_max)),
-        "value":       float(_np.clip(scores["value"],       v_min, v_max)),
-        "saturation":  scores["saturation"],  # personnalisé sans contrainte
-    }
-    clamped_t = float(_np.clip(raw_t, t_min, t_max))
-    return compute_professional_profile(clamped_scores, contrast, skin_temp=clamped_t)
-
-
 def compute_professional_profile(scores, contrast, skin_temp=None):
     """Human-readable 4-dimension profile for stylists.
 
@@ -2479,12 +2454,11 @@ def main():
     skin_temp_norm = float(np.clip(
         (ref_b_for_gauge - params["temp_center"]) / params["temp_scale"], -1, 1
     ))
+    profile = compute_professional_profile(scores, contrast, skin_temp=skin_temp_norm)
     season = classify_season(scores, dominance_thresh)
     top3 = classify_top3(scores)
     confidence = compute_confidence(scores)
     advice = SEASON_ADVICE.get(season, {})
-    # Profil 4D : valeurs mesurées contraintes aux bornes de la saison → personnalisé ET cohérent
-    profile = profile_from_season(season, scores, contrast, skin_temp=skin_temp_norm)
 
     progress.progress(95, text="Diagnostic personnalise...")
     diagnostic = generate_personal_diagnostic(
@@ -2512,7 +2486,7 @@ def main():
                 if _c_base and _c_base != _algo_base and _c_agree in ("majorite", "unanimite"):
                     season = classify_season_in_base(scores, _c_base)
                     advice = SEASON_ADVICE.get(season, {})
-                    profile = profile_from_season(season, scores, contrast, skin_temp=skin_temp_norm)
+                    profile = compute_professional_profile(scores, contrast, skin_temp=skin_temp_norm)
                     diagnostic = generate_personal_diagnostic(
                         skin_stats, iris_stats, hair_info, lip_undertone,
                         profile, season, advice, contrast,
