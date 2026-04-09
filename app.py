@@ -2500,7 +2500,7 @@ def main():
         "neck_b": neck_stats_raw["b"] if neck_stats_raw is not None else None,
         "light_type": light_type,
         "skin_stats": {k: round(float(v), 2) for k, v in skin_stats.items()},
-        "iris_stats": {k: round(float(v), 2) for k, v in iris_stats.items()} if iris_stats else None,
+        "iris_stats": {k: round(float(v), 2) for k, v in iris_stats.items() if k != "rgb"} if iris_stats else None,
     }
 
     # ---- Season result card ----
