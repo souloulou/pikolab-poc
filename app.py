@@ -2034,18 +2034,25 @@ def main():
   }
 
   function detectSheet(px, w, h) {
+    // Zones couvrant toute l'image (gauche, droite, haut, bas, coins)
     const zones = [
-      [0,0,w/2,h/2],[w/2,0,w,h/2],[0,h/2,w/2,h],[w/2,h/2,w,h],
-      [0,0,w/3,h],[2*w/3,0,w,h],[0,0,w,h/3],
+      [0,0,w/2,h],[w/2,0,w,h],         // moitiés gauche / droite
+      [0,0,w/3,h],[2*w/3,0,w,h],       // tiers gauche / droit
+      [0,0,w,h/3],[0,2*h/3,w,h],       // tiers haut / bas
+      [0,0,w/2,h/2],[w/2,h/2,w,h],    // coins diagonaux
     ];
     for (const [x1,y1,x2,y2] of zones) {
       let white=0, total=0;
       for (let y=y1; y<y2; y+=4) for (let x=x1; x<x2; x+=4) {
         const i=((y|0)*w+(x|0))*4;
+        const r=px[i], g=px[i+1], b=px[i+2];
+        const avg=(r+g+b)/3;
+        const spread=Math.max(r,g,b)-Math.min(r,g,b);
         total++;
-        if ((px[i]+px[i+1]+px[i+2])/3>165 && Math.max(px[i],px[i+1],px[i+2])-Math.min(px[i],px[i+1],px[i+2])<60) white++;
+        // Seuils élargis : tolérance cast jaune (spread<85) + luminosité >140
+        if (avg>140 && spread<85) white++;
       }
-      if (total>0 && white/total>0.15) return true;
+      if (total>0 && white/total>0.10) return true;
     }
     return false;
   }
@@ -2112,22 +2119,24 @@ def main():
     overlayCtx.fillText(faceOk ? '✓ Visage centré' : 'Centrez votre visage ici', W*0.5, H*0.87);
     overlayCtx.restore();
 
-    // --- Rectangle feuille (côté droit) ---
-    if (SHEET_REQUIRED) {
-      const sc = sheetOk ? '#4ade80' : '#fbbf24';
+    // --- Indicateur feuille — toujours visible ---
+    {
+      // Vert si détectée, orange si manquante+requise, gris si optionnelle+absente
+      const sc = sheetOk ? '#4ade80' : (SHEET_REQUIRED ? '#f97316' : '#9ca3af');
+      const lw = SHEET_REQUIRED ? 3 : 2;
       overlayCtx.save();
       overlayCtx.strokeStyle = sc;
-      overlayCtx.lineWidth = 3;
+      overlayCtx.lineWidth = lw;
       overlayCtx.setLineDash(sheetOk ? [] : [10, 5]);
       overlayCtx.strokeRect(W*0.65, H*0.18, W*0.30, H*0.54);
       overlayCtx.restore();
-      // icône feuille
       overlayCtx.save();
       overlayCtx.fillStyle = sc;
       overlayCtx.font = 'bold ' + Math.max(11, (H*0.040)|0) + 'px sans-serif';
       overlayCtx.textAlign = 'center';
       overlayCtx.shadowColor = '#000'; overlayCtx.shadowBlur = 4;
-      overlayCtx.fillText(sheetOk ? '✓ Feuille' : 'Feuille A4\npliée en 2', W*0.80, H*0.79);
+      const label = sheetOk ? '✓ Feuille' : (SHEET_REQUIRED ? 'Feuille A4\nrequise ici' : 'Feuille A4\n(optionnelle)');
+      overlayCtx.fillText(label, W*0.80, H*0.79);
       overlayCtx.restore();
     }
 
@@ -2157,7 +2166,7 @@ def main():
     const bar = document.getElementById('bar'); if (!bar) return;
     document.getElementById('fs').textContent = faceOk ? '✅ Visage' : '❌ Centrez votre visage';
     const ssEl = document.getElementById('ss');
-    ssEl.textContent = SHEET_REQUIRED ? (sheetOk ? '✅ Feuille' : '⬜ Feuille manquante') : '';
+    ssEl.textContent = sheetOk ? '✅ Feuille détectée' : (SHEET_REQUIRED ? '🟠 Feuille manquante' : '⬜ Feuille non détectée');
     const cd = document.getElementById('cd');
     const ready = faceOk && (!SHEET_REQUIRED || sheetOk);
     if (ready) {
