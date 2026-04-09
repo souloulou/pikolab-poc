@@ -2230,11 +2230,22 @@ def main():
 </script>
 """.replace("SHEET_REQUIRED_PLACEHOLDER", _sheet_js), height=56, scrolling=False)
 
-        camera_photo = st.camera_input("Visage centré + feuille A4 pliée → capture automatique")
+        camera_photo = st.camera_input("Centrez votre visage · Tenez la feuille A4 à côté")
         if camera_photo:
             image_rgb = load_image(camera_photo)
             if image_rgb is not None:
                 image_rgb = np.fliplr(image_rgb).copy()
+                # Signal de détection feuille immédiat
+                _sheet_check = detect_white_region(image_rgb)
+                if _sheet_check is not None:
+                    st.success("✅ Feuille blanche détectée — correction colorimétrique totale activée")
+                else:
+                    if use_sheet:
+                        st.warning("⚠️ Feuille non détectée sur cette photo. Repositionnez-la bien visible à côté du visage et reprenez.")
+                        if st.button("🔄 Reprendre la photo", use_container_width=True):
+                            st.rerun()
+                    else:
+                        st.info("ℹ️ Aucune feuille blanche détectée — correction par type d'éclairage appliquée.")
 
     elif mode == "Galerie":
         uploaded = st.file_uploader(
