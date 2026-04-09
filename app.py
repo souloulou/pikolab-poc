@@ -1823,18 +1823,28 @@ def main():
         index=0,
     )
 
+    # Params adaptatifs selon l'éclairage déclaré
+    _light_for_params = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
+    _LIGHT_DEFAULTS = {
+        "Lumière naturelle (jour)":                       {"temp_center": 13.0, "temp_scale":  8.0},
+        "Artificiel — lumière blanche (LED, néon)":       {"temp_center": 15.0, "temp_scale":  9.0},
+        "Artificiel — lumière jaune (ampoule, halogène)": {"temp_center": 17.0, "temp_scale": 12.0},
+        "Je ne sais pas":                                 {"temp_center": 15.0, "temp_scale": 10.0},
+    }
+    _adapted = _LIGHT_DEFAULTS.get(_light_for_params, _LIGHT_DEFAULTS["Lumière naturelle (jour)"])
+
     # Classification params (Avance only)
     if view_mode == "Avance":
         with st.sidebar.expander("Seuils de classification", expanded=False):
-            temp_center = st.slider("Temperature neutre (b*)", 5.0, 30.0, DEFAULTS["temp_center"], 0.5)
-            temp_scale = st.slider("Echelle temperature", 5.0, 25.0, DEFAULTS["temp_scale"], 0.5)
+            temp_center = st.slider("Temperature neutre (b*)", 5.0, 30.0, _adapted["temp_center"], 0.5)
+            temp_scale = st.slider("Echelle temperature", 5.0, 25.0, _adapted["temp_scale"], 0.5)
             value_center = st.slider("Valeur mediane (L*)", 30.0, 70.0, DEFAULTS["value_center"], 1.0)
             sat_center = st.slider("Saturation mediane (C*)", 5.0, 35.0, DEFAULTS["sat_center"], 0.5)
             sat_scale = st.slider("Echelle saturation", 5.0, 25.0, DEFAULTS["sat_scale"], 0.5)
             dominance_thresh = st.slider("Seuil de dominance", 0.05, 0.60, DEFAULTS["dominance_thresh"], 0.05)
     else:
-        temp_center = DEFAULTS["temp_center"]
-        temp_scale = DEFAULTS["temp_scale"]
+        temp_center = _adapted["temp_center"]
+        temp_scale = _adapted["temp_scale"]
         value_center = DEFAULTS["value_center"]
         sat_center = DEFAULTS["sat_center"]
         sat_scale = DEFAULTS["sat_scale"]
