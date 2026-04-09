@@ -2499,6 +2499,8 @@ def main():
         "face_b": face_stats["b"],
         "neck_b": neck_stats_raw["b"] if neck_stats_raw is not None else None,
         "light_type": light_type,
+        "skin_stats": {k: round(float(v), 2) for k, v in skin_stats.items()},
+        "iris_stats": {k: round(float(v), 2) for k, v in iris_stats.items()} if iris_stats else None,
     }
 
     # ---- Season result card ----
@@ -2719,6 +2721,36 @@ def main():
             )
         except Exception:
             pass  # Pillow font issue etc — graceful fallback
+
+        # Export profil pour Scan Couleur
+        _ctx = st.session_state.get("ctx", {})
+        _skin = _ctx.get("skin_stats")
+        if _skin:
+            import json as _json
+            _piko_profile = {
+                "version": 1,
+                "season": _ctx["season"],
+                "skin": {"L": _skin["L"], "a": _skin["a"], "b": _skin["b"]},
+                "iris": (
+                    {"L": _ctx["iris_stats"]["L"], "a": _ctx["iris_stats"]["a"], "b": _ctx["iris_stats"]["b"]}
+                    if _ctx.get("iris_stats") else None
+                ),
+                "hair": _ctx.get("hair_info"),
+                "lip": _ctx.get("lip_undertone"),
+                "profile": {
+                    "undertone": _ctx["profile"]["undertone"],
+                    "depth": _ctx["profile"]["depth"],
+                    "chroma": _ctx["profile"]["chroma"],
+                    "contrast": _ctx["profile"]["contrast"],
+                },
+            }
+            st.download_button(
+                "📲 Exporter mon profil vers Scan Couleur",
+                data=_json.dumps(_piko_profile, ensure_ascii=False, indent=2),
+                file_name=f"pikolab_profil_{_ctx['season'].lower().replace(' ', '_')}.json",
+                mime="application/json",
+                use_container_width=True,
+            )
 
         # CTA Coach IA
         if st.button("💬 Parler a Iris, votre coach styliste", type="primary", use_container_width=True):
