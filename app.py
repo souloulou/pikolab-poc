@@ -1697,6 +1697,82 @@ def render_gauge(value, vmin, vmax, label_left, label_right, title):
 
 
 # ============================================================
+# MULTI-PHOTO HELPERS
+# ============================================================
+
+def _extract_skin_stats_silent(image_rgb, params):
+    """Run the skin-stats pipeline on one image without any Streamlit UI.
+
+    Returns (skin_stats_dict, has_sheet) or None if face not detected.
+    """
+    landmarks = detect_face(image_rgb)
+    if landmarks is None:
+        return None
+    face_ok, _ = validate_face(landmarks, image_rgb.shape)
+    if not face_ok:
+        return None
+
+    skin_mask = create_skin_mask(image_rgb.shape, landmarks)
+    neck_mask = create_neck_mask(image_rgb.shape, landmarks)
+
+    wb_reference = detect_white_region(image_rgb)
+    exposure_corrected = correct_exposure(image_rgb, skin_mask)
+
+    if wb_reference is not None:
+        _wb_a_cast, _wb_b_cast = compute_wb_lab_cast(wb_reference)
+        if _wb_b_cast > 10:
+            _wb_strength, _wb_warm_offset = 0.43, 2.5
+        elif _wb_b_cast > 5:
+            _wb_strength, _wb_warm_offset = 0.55, 0.0
+        else:
+            _wb_strength, _wb_warm_offset = 1.0, 0.0
+    else:
+        _wb_a_cast, _wb_b_cast, _wb_warm_offset, _wb_strength = 0.0, 0.0, 0.0, 1.0
+
+    has_makeup = st.session_state.get("chk_has_makeup", False)
+    skin_pixels_rgb = extract_pixels(exposure_corrected, skin_mask)
+    neck_pixels_rgb = extract_pixels(exposure_corrected, neck_mask)
+
+    face_lab = apply_lab_cast_correction(
+        pixels_to_lab(skin_pixels_rgb), _wb_a_cast, _wb_b_cast - _wb_warm_offset, _wb_strength
+    )
+    face_stats = compute_skin_stats_robust(face_lab)
+
+    _neck_lab_raw = pixels_to_lab(neck_pixels_rgb) if len(neck_pixels_rgb) >= 30 else None
+    neck_lab_pixels = apply_lab_cast_correction(
+        _neck_lab_raw, _wb_a_cast, _wb_b_cast - _wb_warm_offset, _wb_strength
+    ) if _neck_lab_raw is not None else None
+    neck_stats = compute_skin_stats_robust(neck_lab_pixels) if neck_lab_pixels is not None else None
+
+    if neck_stats is not None:
+        neck_w = 0.80 if has_makeup else 0.65
+        face_w = 1.0 - neck_w
+        skin_stats = {k: face_stats[k] * face_w + neck_stats[k] * neck_w
+                      for k in ("L", "a", "b", "C")}
+    else:
+        skin_stats = {k: face_stats[k] for k in ("L", "a", "b", "C")}
+
+    return skin_stats, wb_reference is not None
+
+
+def _average_skin_stats(stats_list):
+    """Average a list of skin_stats dicts (L, a, b, C)."""
+    return {k: float(np.mean([s[k] for s in stats_list])) for k in ("L", "a", "b", "C")}
+
+
+def _consistency_label(stats_list):
+    """Return a human-readable consistency label based on b* spread."""
+    b_values = [s["b"] for s in stats_list]
+    spread = max(b_values) - min(b_values)
+    if spread < 1.5:
+        return "✅ Mesures très cohérentes", "success"
+    elif spread < 3.0:
+        return "✅ Mesures cohérentes", "success"
+    else:
+        return f"⚠️ Variation détectée entre les prises (Δb*={spread:.1f}) — résultat indicatif", "warning"
+
+
+# ============================================================
 # STREAMLIT APP
 # ============================================================
 
@@ -1844,7 +1920,8 @@ def main():
 
     if st.sidebar.button("Nouvelle analyse", use_container_width=True):
         for key in ["analysis_done", "ctx", "coach_messages", "demo_image",
-                     "last_scan", "has_white_sheet"]:
+                     "last_scan", "has_white_sheet",
+                     "multi_step", "multi_skin_stats", "multi_last_image"]:
             st.session_state.pop(key, None)
         st.rerun()
 
@@ -2000,11 +2077,75 @@ def main():
     use_sheet = st.session_state.get("chk_use_sheet", False)
 
     if mode == "Appareil photo":
-        st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 pliée en 2 à côté du visage" if use_sheet else ""))
+        analyse_mode = st.radio(
+            "Mode d'analyse",
+            ["Rapide (1 photo)", "Précise (3 photos)"],
+            horizontal=True,
+            help="3 photos dans des endroits différents améliore significativement la précision",
+        )
 
-        # ---- Script de capture automatique + overlay canvas ----
-        _sheet_js = "true" if use_sheet else "false"
-        components.html("""
+        # ---- Mode 3 photos ----
+        if analyse_mode == "Précise (3 photos)":
+            _STEP_CONFIGS = [
+                ("Photo 1/3", "Extérieur ou meilleure lumière naturelle disponible (porte, terrasse, jardin)"),
+                ("Photo 2/3", "Près d'une fenêtre — lumière naturelle indirecte"),
+                ("Photo 3/3", "Autre fenêtre ou autre endroit de la pièce"),
+            ]
+            _step = st.session_state.get("multi_step", 1)
+            _multi_stats = st.session_state.get("multi_skin_stats", [])
+
+            if _step <= 3:
+                _label, _hint = _STEP_CONFIGS[_step - 1]
+                st.progress(_step / 3, text=f"**{_label}** — {_hint}")
+                st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 à côté" if use_sheet else ""))
+
+                if _multi_stats:
+                    _cols = st.columns(len(_multi_stats))
+                    for _i, _s in enumerate(_multi_stats):
+                        _cols[_i].metric(f"Photo {_i+1} — b*", f"{_s['b']:.1f}")
+
+                _cam = st.camera_input(f"{_label} — {_hint}", key=f"cam_multi_{_step}")
+                if _cam:
+                    _img = load_image(_cam)
+                    if _img is not None:
+                        _img = np.fliplr(_img).copy()
+                        with st.spinner(f"Analyse photo {_step}/3..."):
+                            _result = _extract_skin_stats_silent(_img, params)
+                        if _result is None:
+                            st.error("Aucun visage détecté. Reprenez la photo.")
+                        else:
+                            _stats, _sheet_ok = _result
+                            _multi_stats.append(_stats)
+                            st.session_state["multi_skin_stats"] = _multi_stats
+                            st.session_state["multi_last_image"] = _img
+                            st.session_state["multi_step"] = _step + 1
+                            if _sheet_ok:
+                                st.success(f"✅ Photo {_step} — feuille détectée (b*={_stats['b']:.1f})")
+                            else:
+                                st.info(f"Photo {_step} enregistrée (b*={_stats['b']:.1f})")
+                            st.rerun()
+                return
+
+            # Toutes les photos capturées → utiliser la dernière pour le pipeline
+            image_rgb = st.session_state.get("multi_last_image")
+            if image_rgb is None:
+                st.error("Erreur : images perdues. Relancez une nouvelle analyse.")
+                return
+            st.session_state["_multi_averaged_stats"] = _average_skin_stats(_multi_stats)
+            _cons_label, _cons_type = _consistency_label(_multi_stats)
+            if _cons_type == "success":
+                st.success(_cons_label)
+            else:
+                st.warning(_cons_label)
+
+        else:
+            # ---- Mode rapide (1 photo) ----
+            st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 pliée en 2 à côté du visage" if use_sheet else ""))
+
+        # ---- Script de capture automatique + overlay canvas (mode rapide uniquement) ----
+        if analyse_mode == "Rapide (1 photo)":
+            _sheet_js = "true" if use_sheet else "false"
+            components.html("""
 <style>
   body { margin:0; padding:0; background:transparent; overflow:hidden; }
   #bar {
@@ -2236,22 +2377,22 @@ def main():
 </script>
 """.replace("SHEET_REQUIRED_PLACEHOLDER", _sheet_js), height=56, scrolling=False)
 
-        camera_photo = st.camera_input("Centrez votre visage · Tenez la feuille A4 à côté")
-        if camera_photo:
-            image_rgb = load_image(camera_photo)
-            if image_rgb is not None:
-                image_rgb = np.fliplr(image_rgb).copy()
-                # Signal de détection feuille immédiat
-                _sheet_check = detect_white_region(image_rgb)
-                if _sheet_check is not None:
-                    st.success("✅ Feuille blanche détectée — correction colorimétrique totale activée")
-                else:
-                    if use_sheet:
-                        st.warning("⚠️ Feuille non détectée sur cette photo. Repositionnez-la bien visible à côté du visage et reprenez.")
-                        if st.button("🔄 Reprendre la photo", use_container_width=True):
-                            st.rerun()
+            camera_photo = st.camera_input("Centrez votre visage · Tenez la feuille A4 à côté")
+            if camera_photo:
+                image_rgb = load_image(camera_photo)
+                if image_rgb is not None:
+                    image_rgb = np.fliplr(image_rgb).copy()
+                    # Signal de détection feuille immédiat
+                    _sheet_check = detect_white_region(image_rgb)
+                    if _sheet_check is not None:
+                        st.success("✅ Feuille blanche détectée — correction colorimétrique totale activée")
                     else:
-                        st.info("ℹ️ Aucune feuille blanche détectée — correction par type d'éclairage appliquée.")
+                        if use_sheet:
+                            st.warning("⚠️ Feuille non détectée sur cette photo. Repositionnez-la bien visible à côté du visage et reprenez.")
+                            if st.button("🔄 Reprendre la photo", use_container_width=True):
+                                st.rerun()
+                        else:
+                            st.info("ℹ️ Aucune feuille blanche détectée — correction par type d'éclairage appliquée.")
 
     elif mode == "Galerie":
         uploaded = st.file_uploader(
@@ -2473,6 +2614,9 @@ def main():
     eyebrow_info = classify_hair_color(eyebrow_stats)
 
     progress.progress(85, text="Classification saisonniere...")
+    # Mode précise : remplacer skin_stats par la moyenne des 3 photos
+    if "_multi_averaged_stats" in st.session_state:
+        skin_stats = st.session_state.pop("_multi_averaged_stats")
     scores = compute_scores(skin_stats, iris_stats, params)
     contrast = compute_contrast(skin_stats, iris_stats)
     # Référence b* pour la jauge : cou en priorité (non pollué par overtone)
