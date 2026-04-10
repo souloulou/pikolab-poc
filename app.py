@@ -2081,6 +2081,7 @@ def main():
             "Mode d'analyse",
             ["Rapide (1 photo)", "Précise (3 photos)"],
             horizontal=True,
+            key="chk_analyse_mode",
             help="3 photos dans des endroits différents améliore significativement la précision",
         )
 
@@ -2110,7 +2111,11 @@ def main():
                     if _img is not None:
                         _img = np.fliplr(_img).copy()
                         with st.spinner(f"Analyse photo {_step}/3..."):
-                            _result = _extract_skin_stats_silent(_img, params)
+                            try:
+                                _result = _extract_skin_stats_silent(_img, params)
+                            except Exception as _e:
+                                _result = None
+                                st.error(f"Erreur analyse photo {_step} : {_e}")
                         if _result is None:
                             st.error("Aucun visage détecté. Reprenez la photo.")
                         else:
