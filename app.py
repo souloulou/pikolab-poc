@@ -2348,6 +2348,7 @@ def main():
         corrected = correct_wb_with_reference(image_rgb, wb_reference)
         _wb_a_cast, _wb_b_cast = compute_wb_lab_cast(wb_reference)
         _wb_warm_offset = 0.0
+        _wb_strength = 1.0
         correction_method = "Feuille blanche (100% Von Kries)"
     else:
         # Pas de feuille → correction désactivée, résultat indicatif.
@@ -2355,6 +2356,7 @@ def main():
         corrected = exposure_corrected
         _wb_a_cast, _wb_b_cast = 0.0, 0.0
         _wb_warm_offset = 0.0
+        _wb_strength = 1.0
         correction_method = "Correction exposition uniquement"
 
     progress.progress(55, text="Analyse colorimetrique peau, cou et iris...")
@@ -2481,7 +2483,7 @@ def main():
                 st.warning(f"Validation multi-agents non disponible : {exc}")
 
     st.session_state["analysis_done"] = True
-    light_type = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
+    light_type = "Lumière naturelle (jour)"
     st.session_state["ctx"] = {
         "season": season, "advice": advice, "profile": profile,
         "diagnostic": diagnostic, "hair_info": hair_info,
