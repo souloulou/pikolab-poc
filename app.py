@@ -2366,13 +2366,29 @@ def main():
     progress.progress(40, text="Correction des couleurs...")
 
     if wb_reference is not None:
-        # Feuille blanche détectée → correction Von Kries complète en lumière naturelle.
+        # Feuille blanche détectée → correction calibrée selon le cast mesuré.
+        # La force est adaptée automatiquement : la peau n'est pas un réflecteur neutre
+        # et ne nécessite pas 100% de la correction mesurée sur le papier blanc.
+        # Calibration : cast ≈ b*+16 (tungstène) → correction réelle ≈ 5.8 → strength ≈ 0.43
         exposure_corrected = correct_exposure(image_rgb, skin_mask)
         corrected = correct_wb_with_reference(image_rgb, wb_reference)
         _wb_a_cast, _wb_b_cast = compute_wb_lab_cast(wb_reference)
-        _wb_warm_offset = 0.0
-        _wb_strength = 1.0
-        correction_method = "Feuille blanche (100% Von Kries)"
+        if _wb_b_cast > 10:
+            # Cast fort → artificiel jaune/tungstène
+            _wb_strength = 0.43
+            _wb_warm_offset = 2.5
+            _cast_label = "artificiel chaud"
+        elif _wb_b_cast > 5:
+            # Cast moyen → LED/néon
+            _wb_strength = 0.55
+            _wb_warm_offset = 0.0
+            _cast_label = "artificiel blanc"
+        else:
+            # Cast faible → lumière naturelle
+            _wb_strength = 1.0
+            _wb_warm_offset = 0.0
+            _cast_label = "naturelle"
+        correction_method = f"Feuille blanche ({int(_wb_strength*100)}% — lumière {_cast_label})"
     else:
         # Pas de feuille → correction désactivée, résultat indicatif.
         exposure_corrected = correct_exposure(image_rgb, skin_mask)
