@@ -1976,7 +1976,7 @@ def main():
     # Mode selector in main content (not hidden in sidebar)
     mode = st.radio(
         "Comment fournir votre photo ?",
-        ["Appareil photo", "Galerie", "Demo"],
+        ["Appareil photo", "Galerie"],
         horizontal=True,
         label_visibility="collapsed",
     )
@@ -1984,7 +1984,7 @@ def main():
     has_sheet = False
 
     # ---- Onboarding animé (questions pré-capture) ----
-    if mode != "Demo":
+    if mode in ("Appareil photo", "Galerie"):
         _OB_STEPS = [
             {
                 "type": "choice",
@@ -2517,25 +2517,6 @@ def main():
                     "Reglages > Appareil photo > Formats > Le plus compatible."
                 )
 
-    else:  # Demo
-        if st.button("Generer un visage aleatoire", type="primary", use_container_width=True):
-            with st.spinner("Telechargement..."):
-                try:
-                    req = urllib.request.Request(
-                        "https://thispersondoesnotexist.com",
-                        headers={"User-Agent": "PikoLab/1.0"},
-                    )
-                    with urllib.request.urlopen(req, timeout=15) as resp:
-                        data = resp.read()
-                    arr = np.frombuffer(data, np.uint8)
-                    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)
-                    st.session_state["demo_image"] = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-                except Exception as exc:
-                    st.error(f"Echec du telechargement : {exc}")
-
-        if "demo_image" in st.session_state:
-            image_rgb = st.session_state["demo_image"]
-
     if image_rgb is None:
         st.caption("Prenez un selfie ou choisissez une photo pour decouvrir votre palette.")
         return
@@ -2548,8 +2529,7 @@ def main():
         st.session_state["_last_img_sig"] = _img_sig
 
     wb_reference = None
-    if mode != "Demo":
-        wb_reference = detect_white_region(image_rgb)
+    wb_reference = detect_white_region(image_rgb)
         if wb_reference is not None:
             has_sheet = True
             a_cast, b_cast = compute_wb_lab_cast(wb_reference)
@@ -2751,7 +2731,7 @@ def main():
 
     # ---- Consensus multi-agents ----
     consensus_data = None
-    if gemini_api_key and mode != "Demo":
+    if gemini_api_key:
         with st.spinner("Validation multi-agents en cours (3 agents IA)..."):
             try:
                 consensus_data = run_consensus_analysis(
@@ -2801,9 +2781,7 @@ def main():
     _has_sheet = st.session_state.get("has_white_sheet", False)
     _now_month = datetime.now().month
     _is_winter_result = _now_month in (11, 12, 1, 2)
-    if mode == "Demo":
-        conf_text = "Demonstration"
-    elif has_makeup and not _has_sheet:
+    if has_makeup and not _has_sheet:
         conf_text = "Analyse avec maquillage — reprenez sans maquillage ou avec une feuille blanche"
     elif has_makeup:
         conf_text = "Analyse avec maquillage — resultats bases principalement sur le teint du cou"
@@ -2838,7 +2816,7 @@ def main():
     """, unsafe_allow_html=True)
 
     # ---- Disclaimer maquillage ----
-    if has_makeup and mode != "Demo":
+    if has_makeup:
         st.info(
             "**Analyse effectuee avec maquillage.** "
             "Le fond de teint et le contouring peuvent masquer le sous-ton reel du visage. "
