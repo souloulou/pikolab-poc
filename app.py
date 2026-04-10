@@ -33,6 +33,7 @@ MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "face_landmarker.task")
 
 
+@st.cache_resource
 def ensure_model():
     """Download the MediaPipe face landmarker model if not already cached."""
     if os.path.exists(MODEL_PATH):
@@ -190,20 +191,15 @@ SEASON_BOUNDS = {
 # FACE DETECTION
 # ============================================================
 
-_landmarker_instance = None
-
-
+@st.cache_resource(show_spinner="Chargement du modèle de détection visage...")
 def get_face_landmarker():
-    global _landmarker_instance
-    if _landmarker_instance is None:
-        ensure_model()
-        options = FaceLandmarkerOptions(
-            base_options=BaseOptions(model_asset_path=MODEL_PATH),
-            num_faces=1,
-            min_face_detection_confidence=0.5,
-        )
-        _landmarker_instance = FaceLandmarker.create_from_options(options)
-    return _landmarker_instance
+    ensure_model()
+    options = FaceLandmarkerOptions(
+        base_options=BaseOptions(model_asset_path=MODEL_PATH),
+        num_faces=1,
+        min_face_detection_confidence=0.5,
+    )
+    return FaceLandmarker.create_from_options(options)
 
 
 def detect_face(image_rgb):
