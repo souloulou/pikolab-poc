@@ -1841,28 +1841,18 @@ def main():
         index=0,
     )
 
-    # Params adaptatifs selon l'éclairage déclaré
-    _light_for_params = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
-    _LIGHT_DEFAULTS = {
-        "Lumière naturelle (jour)":                       {"temp_center": 13.0, "temp_scale":  8.0},
-        "Artificiel — lumière blanche (LED, néon)":       {"temp_center": 15.0, "temp_scale":  9.0},
-        "Artificiel — lumière jaune (ampoule, halogène)": {"temp_center": 17.0, "temp_scale": 12.0},
-        "Je ne sais pas":                                 {"temp_center": 15.0, "temp_scale": 10.0},
-    }
-    _adapted = _LIGHT_DEFAULTS.get(_light_for_params, _LIGHT_DEFAULTS["Lumière naturelle (jour)"])
-
     # Classification params (Avance only)
     if view_mode == "Avance":
         with st.sidebar.expander("Seuils de classification", expanded=False):
-            temp_center = st.slider("Temperature neutre (b*)", 5.0, 30.0, _adapted["temp_center"], 0.5)
-            temp_scale = st.slider("Echelle temperature", 5.0, 25.0, _adapted["temp_scale"], 0.5)
+            temp_center = st.slider("Temperature neutre (b*)", 5.0, 30.0, DEFAULTS["temp_center"], 0.5)
+            temp_scale = st.slider("Echelle temperature", 5.0, 25.0, DEFAULTS["temp_scale"], 0.5)
             value_center = st.slider("Valeur mediane (L*)", 30.0, 70.0, DEFAULTS["value_center"], 1.0)
             sat_center = st.slider("Saturation mediane (C*)", 5.0, 35.0, DEFAULTS["sat_center"], 0.5)
             sat_scale = st.slider("Echelle saturation", 5.0, 25.0, DEFAULTS["sat_scale"], 0.5)
             dominance_thresh = st.slider("Seuil de dominance", 0.05, 0.60, DEFAULTS["dominance_thresh"], 0.05)
     else:
-        temp_center = _adapted["temp_center"]
-        temp_scale = _adapted["temp_scale"]
+        temp_center = DEFAULTS["temp_center"]
+        temp_scale = DEFAULTS["temp_scale"]
         value_center = DEFAULTS["value_center"]
         sat_center = DEFAULTS["sat_center"]
         sat_scale = DEFAULTS["sat_scale"]
@@ -1952,67 +1942,42 @@ def main():
                 help="Feuille A4 pliée en 2, tenue à plat à côté du visage — nécessaire pour corriger le filtre couleur de la caméra",
             )
 
-        # ---- Question éclairage ----
-        light_type = st.radio(
-            "Éclairage au moment de la photo :",
-            [
-                "Lumière naturelle (jour)",
-                "Artificiel — lumière blanche (LED, néon)",
-                "Artificiel — lumière jaune (ampoule, halogène)",
-                "Je ne sais pas",
-            ],
-            horizontal=False,
-            key="chk_light_type",
-            help=(
-                "La lumière naturelle est l'idéal. "
-                "Lumière blanche (LED/néon) : cast bleu-vert léger. "
-                "Lumière jaune (tungstène/halogène) : cast chaud fort qui peut fausser le sous-ton. "
-                "Une feuille blanche permet de compenser dans tous les cas."
-            ),
-        )
-        if light_type == "Lumière naturelle (jour)":
-            _now = datetime.now()
-            _h = _now.hour + _now.minute / 60
-            _month = _now.month
-            if _month in (5, 6, 7, 8):           # Été
-                _ok_start, _ok_end = 10, 16
-                _season_label = "en été"
-            elif _month in (11, 12, 1, 2):        # Hiver
-                _ok_start, _ok_end = 11, 14
-                _season_label = "en hiver"
-            else:                                  # Printemps / Automne
-                _ok_start, _ok_end = 10, 15
-                _season_label = "au printemps/automne"
-            if not (_ok_start <= _h <= _ok_end):
-                st.warning(
-                    f"⚠️ Il est {_now.strftime('%Hh%M')} — en dehors de la plage recommandée "
-                    f"({_ok_start}h–{_ok_end}h {_season_label}). "
-                    "La lumière est trop basse et trop chaude, ce qui peut fausser le sous-ton. "
-                    "Préférez une photo près d'une fenêtre exposée au nord, ou revenez dans la plage horaire."
-                )
-        elif light_type == "Artificiel — lumière jaune (ampoule, halogène)":
+        # ---- Avertissement plage horaire lumière naturelle ----
+        _now = datetime.now()
+        _h = _now.hour + _now.minute / 60
+        _month = _now.month
+        _is_winter = _month in (11, 12, 1, 2)
+        if _month in (5, 6, 7, 8):
+            _ok_start, _ok_end = 10, 16
+            _season_label = "en été"
+        elif _is_winter:
+            _ok_start, _ok_end = 11, 14
+            _season_label = "en hiver"
+        else:
+            _ok_start, _ok_end = 10, 15
+            _season_label = "au printemps/automne"
+
+        if not (_ok_start <= _h <= _ok_end):
             st.warning(
-                "Lumière jaune détectée : cast chaud fort qui peut faire lire un teint neutre comme chaud. "
-                "La correction est atténuée pour éviter une inversion. Utilisez une feuille blanche pour plus de précision."
+                f"⚠️ Il est {_now.strftime('%Hh%M')} — en dehors de la plage recommandée "
+                f"({_ok_start}h–{_ok_end}h {_season_label}). "
+                "La lumière est trop basse et trop chaude, ce qui peut fausser le sous-ton. "
+                "Préférez une photo près d'une fenêtre exposée au nord, ou revenez dans la plage horaire."
             )
-        elif light_type == "Artificiel — lumière blanche (LED, néon)":
-            st.caption(
-                "Lumière blanche : cast bleu-vert léger. "
-                "Une feuille blanche comme référence améliore encore la précision."
+        elif _is_winter:
+            st.info(
+                "Lumière hivernale : le soleil est bas et la lumière plus froide que la norme D65. "
+                "La **feuille blanche est indispensable** pour corriger le cast et obtenir un résultat fiable. "
+                "Sans elle, le résultat sera indicatif uniquement."
             )
-        elif light_type == "Je ne sais pas":
-            st.caption(
-                "Pas de problème — une correction intermédiaire sera appliquée. "
-                "Pour un meilleur résultat, approchez-vous d'une fenêtre."
-            )
+        light_type = "Lumière naturelle (jour)"
     else:
         light_type = "Lumière naturelle (jour)"
 
     use_sheet = st.session_state.get("chk_use_sheet", False)
 
     if mode == "Appareil photo":
-        light_label = "" if light_type == "Lumière naturelle (jour)" else f" · {light_type}"
-        st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 pliée en 2 à côté du visage" if use_sheet else "") + light_label)
+        st.caption("Lumiere naturelle · Visage de face" + (" · Feuille A4 pliée en 2 à côté du visage" if use_sheet else ""))
 
         # ---- Script de capture automatique + overlay canvas ----
         _sheet_js = "true" if use_sheet else "false"
@@ -2376,43 +2341,21 @@ def main():
     lip_px = int(np.count_nonzero(lip_mask))
 
     progress.progress(40, text="Correction des couleurs...")
-    _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
-
-    # Calibration empirique : la feuille mesure 100% du cast de l'illuminant,
-    # mais la peau ne nécessite qu'une correction partielle (elle n'est pas un réflecteur neutre).
-    # Calibré sur référence Soft Autumn connue sous tungstène :
-    # cast mesuré ≈ b*+16, correction nécessaire ≈ 5.8 → strength ≈ 0.43.
-    # Le warm_offset compense le résidu après correction partielle.
-    _WB_STRENGTH = {
-        "Lumière naturelle (jour)":                       1.0,
-        "Artificiel — lumière blanche (LED, néon)":       0.55,
-        "Artificiel — lumière jaune (ampoule, halogène)": 0.43,
-        "Je ne sais pas":                                 0.35,
-    }
-    _WB_WARM_OFFSET = {
-        "Artificiel — lumière jaune (ampoule, halogène)": 2.5,
-        "Je ne sais pas":                                 1.0,
-    }
-    _wb_strength = _WB_STRENGTH.get(_light, 1.0)
-    _wb_warm_offset = _WB_WARM_OFFSET.get(_light, 0.0)
 
     if wb_reference is not None:
-        # Feuille blanche détectée → mesure réelle du cast de l'illuminant.
-        # On applique la correction calibrée (strength < 1.0) car la peau absorbe
-        # la lumière différemment du papier blanc : une correction 100% sur-corrigerait
-        # et ferait lire un teint chaud comme froid.
+        # Feuille blanche détectée → correction Von Kries complète en lumière naturelle.
         exposure_corrected = correct_exposure(image_rgb, skin_mask)
         corrected = correct_wb_with_reference(image_rgb, wb_reference)
         _wb_a_cast, _wb_b_cast = compute_wb_lab_cast(wb_reference)
-        correction_method = f"Feuille blanche ({int(_wb_strength*100)}% calibré)"
+        _wb_warm_offset = 0.0
+        correction_method = "Feuille blanche (100% Von Kries)"
     else:
-        # Pas de feuille → aucune mesure de cast, correction désactivée.
-        # Le temp_center adaptatif (selon éclairage déclaré) compense la dérive.
+        # Pas de feuille → correction désactivée, résultat indicatif.
         exposure_corrected = correct_exposure(image_rgb, skin_mask)
         corrected = exposure_corrected
         _wb_a_cast, _wb_b_cast = 0.0, 0.0
-        _wb_warm_offset = 0.0  # sans référence, l'offset n'a pas de sens
-        correction_method = f"Estimation ({_light.split('—')[-1].strip() if '—' in _light else _light})"
+        _wb_warm_offset = 0.0
+        correction_method = "Correction exposition uniquement"
 
     progress.progress(55, text="Analyse colorimetrique peau, cou et iris...")
     # Skin and neck: extracted from exposure-only image, then Lab cast correction applied
@@ -2559,25 +2502,25 @@ def main():
     c2 = season_colors[1] if len(season_colors) > 1 else c1
 
     has_makeup = st.session_state.get("chk_has_makeup", False)
-    _light = st.session_state.get("chk_light_type", "Lumière naturelle (jour)")
-    _bad_light  = _light in ("Artificiel — lumière jaune (ampoule, halogène)",)
-    _ok_light   = _light in ("Lumière naturelle (jour)",)
+    _has_sheet = st.session_state.get("has_white_sheet", False)
+    _now_month = datetime.now().month
+    _is_winter_result = _now_month in (11, 12, 1, 2)
     if mode == "Demo":
         conf_text = "Demonstration"
-    elif _bad_light and has_makeup:
-        conf_text = "Resultat peu fiable — maquillage + eclairage defavorable"
-    elif _bad_light:
-        conf_text = "Resultat a confirmer — eclairage defavorable. Reprenez en lumiere naturelle ou blanche."
+    elif has_makeup and not _has_sheet:
+        conf_text = "Analyse avec maquillage — reprenez sans maquillage ou avec une feuille blanche"
     elif has_makeup:
         conf_text = "Analyse avec maquillage — resultats bases principalement sur le teint du cou"
-    elif not _ok_light:
-        conf_text = "Resultat indicatif — eclairage artificiel. Une feuille blanche ameliore la precision."
+    elif _has_sheet and confidence >= 0.7:
+        conf_text = "Resultat fiable — feuille blanche detectee"
+    elif _has_sheet:
+        conf_text = "Resultat indicatif — feuille blanche detectee"
+    elif _is_winter_result:
+        conf_text = "Resultat peu fiable — lumiere hivernale sans feuille blanche. Reprenez avec une feuille A4"
     elif confidence >= 0.7:
-        conf_text = "Resultat fiable"
-    elif confidence >= 0.5:
-        conf_text = "Resultat indicatif"
+        conf_text = "Resultat indicatif — ajoutez une feuille blanche pour plus de precision"
     else:
-        conf_text = "Resultat a confirmer — reprenez la photo en lumiere naturelle"
+        conf_text = "Resultat a confirmer — reprenez avec une feuille blanche en lumiere naturelle"
 
     tagline = advice.get("tagline", "")
     desc = advice.get("description", "")
