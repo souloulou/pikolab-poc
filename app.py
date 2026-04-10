@@ -33,7 +33,7 @@ MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
 MODEL_PATH = os.path.join(MODEL_DIR, "face_landmarker.task")
 
 
-@st.cache_resource
+@st.cache_resource(show_spinner="Téléchargement du modèle de détection visage (~4MB)...")
 def ensure_model():
     """Download the MediaPipe face landmarker model if not already cached."""
     if os.path.exists(MODEL_PATH):

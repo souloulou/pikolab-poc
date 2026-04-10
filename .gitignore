@@ -2,7 +2,7 @@ __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
-models/__pycache__/
+models/
 tests/fixtures/test_face.jpg
 .streamlit/secrets.toml
 *.egg-info/
