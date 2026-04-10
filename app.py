@@ -1489,12 +1489,13 @@ def _format_scan_context():
     return "\n".join(lines)
 
 
-def build_coach_system_prompt(season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data, light_type=None):
+def build_coach_system_prompt(season, advice, profile, diagnostic, hair_info, lip_undertone, quiz_data, light_type=None, gender="Femme"):
     """Build a comprehensive system prompt with all client context."""
     diag_text = "\n".join(
         f"- {d['feature']}: {d['title']} — {d['detail']}" for d in diagnostic
     )
 
+    is_man = gender == "Homme"
     makeup = advice.get("makeup", {})
     clothing = advice.get("clothing", {})
     hair = advice.get("hair", {})
@@ -1513,12 +1514,23 @@ Reponses questionnaire client :
 - Interet principal : {quiz_data.get('interest', 'non renseigne')}
 """
 
+    _persona_genre = (
+        "Tu t'adresses a un homme. Adapte TOUS tes conseils en consequence : "
+        "vetements masculins (costumes, chemises, vestes, pulls, manteaux), "
+        "soins du visage a la place du maquillage, coiffure masculine. "
+        "Pas de robe, pas de jupe, pas de maquillage. Dis 'mon ami' ou utilise le prenom. "
+        "Reste energique et directe, mais avec un registre adapte a un homme."
+        if is_man else
+        "Tu t'adresses a une femme. Tous les conseils sont adaptes : vetements, maquillage, bijoux, etc."
+    )
+
     return f"""**Persona :**
 Tu es Iris, coach en image et colorimetrie, avec la franchise et l'energie de Cristina Cordula.
 Tu es passionnee, directe, tu dis les choses telles qu'elles sont — avec bienveillance mais
 SANS filtre. Si une couleur est catastrophique sur le client, tu le dis clairement. Si c'est
 magnifique, tu t'enthousiasmes. Tu tutoies le client. Tu utilises des expressions vivantes.
 Tu parles TOUJOURS en francais.
+{_persona_genre}
 
 Tu es experte en colorimetrie saisonniere (systeme 16 saisons), en stylisme, en maquillage
 et en conseil en image. Tu connais les dernieres tendances mais tu privilegies TOUJOURS
@@ -1557,6 +1569,7 @@ une information nouvelle et actionnable.
 ---
 
 PROFIL DU CLIENT :
+- Genre : {gender}
 - Saison : {season}
 - Description : {advice.get('description', '')}
 - Sous-ton : {profile['undertone']} (score brut: {profile['raw_undertone']:.2f})
@@ -1581,14 +1594,14 @@ ALTERNATIVES :
 - Au lieu du blanc : {advice.get('white_alt', '')}
 - Metaux : {advice.get('metals', '')}
 
-MAQUILLAGE :
+{"SOINS VISAGE (homme) : Conseille des soins adaptés au teint et au sous-ton de la saison. Pas de maquillage. Concentre-toi sur l'harmonie des couleurs vestimentaires proches du visage (col de chemise, pull, veste)." if is_man else f"""MAQUILLAGE :
 - Fond de teint : {makeup.get('foundation', '')}
 - Levres : {', '.join(makeup.get('lips', []))}
 - Yeux : {', '.join(makeup.get('eyes', []))}
 - Blush : {', '.join(makeup.get('blush', []))}
 - Look naturel : {makeup.get('look_naturel', '')}
 - Look soiree : {makeup.get('look_soiree', '')}
-- Look bureau : {makeup.get('look_pro', '')}
+- Look bureau : {makeup.get('look_pro', '')}"""}
 
 VETEMENTS :
 - Meilleures combinaisons : {', '.join(clothing.get('best_combinations', []))}
@@ -1840,6 +1853,16 @@ def main():
         ["Client", "Professionnel", "Avance"],
         index=0,
     )
+
+    st.sidebar.markdown("---")
+    gender = st.sidebar.radio(
+        "Genre",
+        ["Femme", "Homme"],
+        index=0,
+        horizontal=True,
+        key="chk_gender",
+    )
+    st.sidebar.markdown("---")
 
     # Classification params (Avance only)
     if view_mode == "Avance":
@@ -2494,6 +2517,7 @@ def main():
         "face_b": face_stats["b"],
         "neck_b": neck_stats_raw["b"] if neck_stats_raw is not None else None,
         "light_type": light_type,
+        "gender": st.session_state.get("chk_gender", "Femme"),
         "skin_stats": {k: round(float(v), 2) for k, v in skin_stats.items()},
         "iris_stats": {k: round(float(v), 2) for k, v in iris_stats.items() if k != "rgb"} if iris_stats else None,
     }
