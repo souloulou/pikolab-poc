@@ -1917,7 +1917,8 @@ def main():
     if st.sidebar.button("Nouvelle analyse", use_container_width=True):
         for key in ["analysis_done", "ctx", "coach_messages", "demo_image",
                      "last_scan", "has_white_sheet",
-                     "multi_step", "multi_skin_stats", "multi_last_image"]:
+                     "multi_step", "multi_skin_stats", "multi_last_image",
+                     "onboarding_step"]:
             st.session_state.pop(key, None)
         st.rerun()
 
@@ -1927,14 +1928,6 @@ def main():
         index=0,
     )
 
-    st.sidebar.markdown("---")
-    gender = st.sidebar.radio(
-        "Genre",
-        ["Femme", "Homme"],
-        index=0,
-        horizontal=True,
-        key="chk_gender",
-    )
     st.sidebar.markdown("---")
 
     # Classification params (Avance only)
@@ -1990,53 +1983,169 @@ def main():
 
     has_sheet = False
 
-    # ---- Questions pré-capture (tous modes sauf Demo) ----
+    # ---- Onboarding animé (questions pré-capture) ----
     if mode != "Demo":
-        st.markdown("**Avant la photo :**")
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.checkbox(
-                "Maquillage",
-                key="chk_has_makeup",
-                value=False,
-                help="Fond de teint, blush ou contouring — le cou sera utilisé comme référence principale de teint",
+        _OB_STEPS = [
+            {
+                "type": "choice",
+                "key": "chk_gender",
+                "q": "Je suis...",
+                "subtitle": None,
+                "options": ["Une femme", "Un homme"],
+                "values": ["Femme", "Homme"],
+            },
+            {
+                "type": "yesno",
+                "key": "chk_has_makeup",
+                "q": "Je porte du maquillage",
+                "subtitle": "Fond de teint, blush ou contouring",
+                "oui_value": True,
+                "non_value": False,
+            },
+            {
+                "type": "yesno",
+                "key": "chk_natural_eyebrows",
+                "q": "Mes sourcils sont naturels",
+                "subtitle": "Non teints, non tatoués, non redessinés",
+                "oui_value": True,
+                "non_value": False,
+            },
+            {
+                "type": "yesno",
+                "key": "chk_natural_hair",
+                "q": "Ma couleur de cheveux est naturelle",
+                "subtitle": "Ni colorée, ni décolorée, ni balayage",
+                "oui_value": True,
+                "non_value": False,
+            },
+            {
+                "type": "yesno",
+                "key": "chk_hair_tied",
+                "q": "Mes cheveux sont attachés",
+                "subtitle": "Visage et cou bien dégagés",
+                "oui_value": True,
+                "non_value": False,
+            },
+            {
+                "type": "yesno",
+                "key": "chk_no_colored_contacts",
+                "q": "Je porte des lentilles de couleur",
+                "subtitle": "Si oui, retirez-les pour une analyse précise",
+                "oui_value": False,
+                "non_value": True,
+            },
+            {
+                "type": "interstitial",
+                "key": None,
+            },
+            {
+                "type": "yesno",
+                "key": "chk_use_sheet",
+                "q": "J'ai une feuille blanche a portee de main",
+                "subtitle": "Feuille A4 pliee en 2, tenue a plat a cote du visage",
+                "oui_value": True,
+                "non_value": False,
+            },
+        ]
+        _OB_TOTAL = 7  # questions reelles (hors interstitiel)
+
+        if "onboarding_step" not in st.session_state:
+            st.session_state.onboarding_step = 0
+
+        _ob_step = st.session_state.onboarding_step
+        _ob_done = _ob_step >= len(_OB_STEPS)
+
+        if not _ob_done:
+            _cur = _OB_STEPS[_ob_step]
+            # Numero de question affichee (interstitiel = index 6, ne compte pas)
+            _q_num = _ob_step if _ob_step < 6 else max(0, _ob_step - 1)
+
+            st.markdown(
+                f"""<style>
+@keyframes _ob_slide {{
+    from {{ opacity: 0; transform: translateX(48px); }}
+    to   {{ opacity: 1; transform: translateX(0); }}
+}}
+.ob-wrap {{ animation: _ob_slide .32s cubic-bezier(.25,.46,.45,.94); }}
+.ob-dots {{ display: flex; gap: 6px; margin-bottom: 2rem; }}
+.ob-dot  {{ flex: 1; height: 4px; border-radius: 2px; background: rgba(120,113,108,.3); }}
+.ob-dot.on {{ background: #f97316; }}
+.ob-q    {{ font-size: 1.45rem; font-weight: 700; line-height: 1.25; margin: .2rem 0 .4rem; }}
+.ob-sub  {{ font-size: .82rem; opacity: .55; margin-bottom: 1.8rem; }}
+</style>
+<div class="ob-wrap" id="ob{_ob_step}">
+  <div class="ob-dots">
+    {''.join(f'<div class="ob-dot{" on" if i <= _q_num else ""}"></div>' for i in range(_OB_TOTAL))}
+  </div>
+</div>""",
+                unsafe_allow_html=True,
             )
-        with col2:
-            st.checkbox(
-                "Sourcils naturels",
-                key="chk_natural_eyebrows",
-                value=True,
-                help="Non teints, non tatoués, non redessinés",
-            )
-        with col3:
-            st.checkbox(
-                "Cheveux naturels",
-                key="chk_natural_hair",
-                value=True,
-                help="Couleur non traitée (ni colorée, ni décolorée, ni balayage). Si vos cheveux sont colorés, l'analyse de leur teinte sera ignorée.",
-            )
-        col4, col5, col6 = st.columns(3)
-        with col4:
-            st.checkbox(
-                "Cheveux attachés",
-                key="chk_hair_tied",
-                value=False,
-                help="Dégager le visage et le cou améliore la précision de l'analyse",
-            )
-        with col5:
-            st.checkbox(
-                "Sans lentilles colorées",
-                key="chk_no_colored_contacts",
-                value=True,
-                help="Les lentilles de couleur faussent l'analyse de l'iris. Retirez-les ou cochez cette case uniquement si vos lentilles sont transparentes.",
-            )
-        with col6:
-            st.checkbox(
-                "Feuille blanche",
-                key="chk_use_sheet",
-                value=True,
-                help="Feuille A4 pliée en 2, tenue à plat à côté du visage — nécessaire pour corriger le filtre couleur de la caméra",
-            )
+
+            if _cur["type"] == "interstitial":
+                st.markdown(
+                    """<div style="text-align:center;padding:1.2rem 0 2rem">
+  <div style="font-size:2.4rem;margin-bottom:.6rem">📄</div>
+  <div style="font-size:1.15rem;font-weight:700;margin-bottom:.6rem">
+    La prochaine etape est determinante
+  </div>
+  <div style="opacity:.6;font-size:.88rem;line-height:1.6">
+    La feuille blanche permet d'analyser la couleur de l'eclairage<br>
+    et de corriger automatiquement le filtre de votre camera.<br>
+    <strong>Sans elle, le resultat sera approximatif.</strong>
+  </div>
+</div>""",
+                    unsafe_allow_html=True,
+                )
+                if st.button("Continuer", type="primary", use_container_width=True, key="ob_cont"):
+                    st.session_state.onboarding_step += 1
+                    st.rerun()
+
+            elif _cur["type"] == "choice":
+                st.markdown(f'<p class="ob-q">{_cur["q"]}</p>', unsafe_allow_html=True)
+                _c1, _c2 = st.columns(2)
+                for _i, (_lbl, _val) in enumerate(zip(_cur["options"], _cur["values"])):
+                    with (_c1 if _i == 0 else _c2):
+                        if st.button(
+                            _lbl,
+                            key=f"ob_c{_ob_step}_{_i}",
+                            use_container_width=True,
+                            type="primary" if _i == 0 else "secondary",
+                        ):
+                            st.session_state[_cur["key"]] = _val
+                            st.session_state.onboarding_step += 1
+                            st.rerun()
+
+            else:  # yesno
+                st.markdown(f'<p class="ob-q">{_cur["q"]}</p>', unsafe_allow_html=True)
+                if _cur.get("subtitle"):
+                    st.markdown(f'<p class="ob-sub">{_cur["subtitle"]}</p>', unsafe_allow_html=True)
+                _c1, _c2 = st.columns(2)
+                with _c1:
+                    if st.button("Oui", key=f"ob_oui{_ob_step}", use_container_width=True, type="primary"):
+                        st.session_state[_cur["key"]] = _cur["oui_value"]
+                        st.session_state.onboarding_step += 1
+                        st.rerun()
+                with _c2:
+                    if st.button("Non", key=f"ob_non{_ob_step}", use_container_width=True):
+                        st.session_state[_cur["key"]] = _cur["non_value"]
+                        st.session_state.onboarding_step += 1
+                        st.rerun()
+
+            st.stop()
+
+        # Onboarding terminé — valeurs par defaut pour cles eventuellement absentes
+        _ob_defaults = {
+            "chk_gender": "Femme",
+            "chk_has_makeup": False,
+            "chk_natural_eyebrows": True,
+            "chk_natural_hair": True,
+            "chk_hair_tied": False,
+            "chk_no_colored_contacts": True,
+            "chk_use_sheet": True,
+        }
+        for _k, _v in _ob_defaults.items():
+            if _k not in st.session_state:
+                st.session_state[_k] = _v
 
         # ---- Avertissement plage horaire lumière naturelle ----
         _now = datetime.now()
