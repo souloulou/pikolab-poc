@@ -2528,33 +2528,32 @@ def main():
         st.session_state.pop("no_sheet_override", None)
         st.session_state["_last_img_sig"] = _img_sig
 
-    wb_reference = None
     wb_reference = detect_white_region(image_rgb)
-        if wb_reference is not None:
-            has_sheet = True
-            a_cast, b_cast = compute_wb_lab_cast(wb_reference)
-            st.success(f"✅ Feuille blanche détectée — cast corrigé (a*{a_cast:+.1f}, b*{b_cast:+.1f})")
-            # Preview Lab-space : même correction que l'analyse (pas RGB gains)
-            _img_lab = rgb2lab(image_rgb / 255.0)
-            _img_lab_corr = _img_lab.copy()
-            _img_lab_corr[:, :, 1] -= a_cast
-            _img_lab_corr[:, :, 2] -= b_cast
-            corrected_preview = np.clip(lab2rgb(_img_lab_corr) * 255, 0, 255).astype(np.uint8)
-            _pc1, _pc2 = st.columns(2)
-            _pc1.image(image_rgb, caption="Photo originale", use_container_width=True)
-            _pc2.image(corrected_preview, caption="Après correction couleur", use_container_width=True)
-        else:
-            has_sheet = False
-            st.warning(
-                "⚠️ Aucune feuille blanche détectée. "
-                "Sans référence neutre, un filtre coloré de votre caméra peut fausser le sous-ton. "
-                "Reprenez la photo avec une feuille A4 blanche tenue à côté du visage."
-            )
-            if not st.session_state.get("no_sheet_override"):
-                if st.button("Analyser quand même (résultat moins fiable)", type="secondary"):
-                    st.session_state["no_sheet_override"] = True
-                    st.rerun()
-                return
+    if wb_reference is not None:
+        has_sheet = True
+        a_cast, b_cast = compute_wb_lab_cast(wb_reference)
+        st.success(f"✅ Feuille blanche détectée — cast corrigé (a*{a_cast:+.1f}, b*{b_cast:+.1f})")
+        # Preview Lab-space : même correction que l'analyse (pas RGB gains)
+        _img_lab = rgb2lab(image_rgb / 255.0)
+        _img_lab_corr = _img_lab.copy()
+        _img_lab_corr[:, :, 1] -= a_cast
+        _img_lab_corr[:, :, 2] -= b_cast
+        corrected_preview = np.clip(lab2rgb(_img_lab_corr) * 255, 0, 255).astype(np.uint8)
+        _pc1, _pc2 = st.columns(2)
+        _pc1.image(image_rgb, caption="Photo originale", use_container_width=True)
+        _pc2.image(corrected_preview, caption="Après correction couleur", use_container_width=True)
+    else:
+        has_sheet = False
+        st.warning(
+            "⚠️ Aucune feuille blanche détectée. "
+            "Sans référence neutre, un filtre coloré de votre caméra peut fausser le sous-ton. "
+            "Reprenez la photo avec une feuille A4 blanche tenue à côté du visage."
+        )
+        if not st.session_state.get("no_sheet_override"):
+            if st.button("Analyser quand même (résultat moins fiable)", type="secondary"):
+                st.session_state["no_sheet_override"] = True
+                st.rerun()
+            return
 
     # ---- Pipeline with progress ----
     hero_placeholder.empty()
