@@ -36,10 +36,12 @@ st.sidebar.page_link("pages/scanner.py", label="Scanner", icon="📷")
 st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
 
 # ---- Check prerequisites ----
-try:
-    ai_key = st.secrets.get("GEMINI_API_KEY", os.environ.get("GEMINI_API_KEY", ""))
-except Exception:
-    ai_key = os.environ.get("GEMINI_API_KEY", "")
+ai_key = os.environ.get("GEMINI_API_KEY", "")
+if not ai_key:
+    try:
+        ai_key = st.secrets.get("GEMINI_API_KEY", "")
+    except Exception:
+        ai_key = ""
 
 if not ai_key:
     st.warning("Cle API Gemini non configuree. Ajoutez GEMINI_API_KEY dans .streamlit/secrets.toml")
