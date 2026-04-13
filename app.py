@@ -2810,6 +2810,19 @@ def main():
             except Exception as exc:
                 st.warning(f"Validation multi-agents non disponible : {exc}")
 
+    # ---- Recalibrer le profil sur les centroïdes de la saison finale ----
+    # Garantit que les jauges (chaleur, profondeur, chroma) sont toujours
+    # cohérentes avec la saison affichée, quelle que soit la source du résultat.
+    _centroid = SEASON_CENTROIDS.get(season)
+    if _centroid:
+        _ct, _cv, _cs = _centroid
+        _centroid_scores = {"temperature": _ct, "value": _cv, "saturation": _cs}
+        profile = compute_professional_profile(_centroid_scores, contrast, skin_temp=_ct)
+        diagnostic = generate_personal_diagnostic(
+            skin_stats, iris_stats, hair_info, lip_undertone,
+            profile, season, advice, contrast,
+        )
+
     st.session_state["analysis_done"] = True
     light_type = "Lumière naturelle (jour)"
     st.session_state["ctx"] = {
