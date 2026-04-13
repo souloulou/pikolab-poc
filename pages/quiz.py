@@ -120,7 +120,8 @@ QUESTIONS = [
         "subtitle": "Après qu'un bouton ou une rougeur guérit, quelle trace reste-t-il sur votre peau ?",
         "weight": {"warmth": 1.5, "depth": 0, "chroma": 0.5},
         "options": [
-            {"id": "blemish-pink-red", "label": "Une tache rose ou rosée",    "sublabel": "La marque reste rose, rouge rosé ou légèrement violacée", "hex": "#E07080", "scores": {"warmth": -1.5, "depth": 2.5, "chroma": 2.0}},
+            {"id": "blemish-purple",   "label": "Une tache violacée ou mauve", "sublabel": "La marque vire au violet, mauve ou bordeaux froid",      "hex": "#907090", "scores": {"warmth": -2,   "depth": 2.5, "chroma": 1.5}},
+            {"id": "blemish-pink-red", "label": "Une tache rose ou rosée",    "sublabel": "La marque reste rose ou rouge rosé",                       "hex": "#E07080", "scores": {"warmth": -1.5, "depth": 2.5, "chroma": 2.0}},
             {"id": "blemish-red",      "label": "Une tache rouge ou orangée", "sublabel": "La marque reste rouge vif ou rouge-orangé",               "hex": "#D04030", "scores": {"warmth": 1,    "depth": 2.5, "chroma": 2.5}},
             {"id": "blemish-brown",    "label": "Une tache brune ou miel",    "sublabel": "La marque vire au brun, caramel ou hyperpigmentation chaude","hex": "#A06040", "scores": {"warmth": 2,    "depth": 3.5, "chroma": 1.0}},
             {"id": "blemish-rare",     "label": "Aucune trace visible",       "sublabel": "La peau cicatrise sans laisser de marque colorée",         "hex": "#D0B8A8", "scores": {"warmth": 0,    "depth": 0,   "chroma": 0.0}},
