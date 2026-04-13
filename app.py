@@ -1948,7 +1948,7 @@ def main():
         for key in ["analysis_done", "ctx", "coach_messages", "demo_image",
                      "last_scan", "has_white_sheet",
                      "multi_step", "multi_skin_stats", "multi_last_image",
-                     "onboarding_step"]:
+                     "onboarding_step", "guidance_seen"]:
             st.session_state.pop(key, None)
         st.rerun()
 
@@ -2107,6 +2107,88 @@ def main():
             },
         ]
         _OB_TOTAL = 7  # questions reelles (hors interstitiel)
+
+        # ── Écran de guidage (affiché une fois par session avant l'onboarding) ──
+        if not st.session_state.get("guidance_seen"):
+            _now   = datetime.now()
+            _h     = _now.hour + _now.minute / 60
+            _month = _now.month
+            if _month in (5, 6, 7, 8):
+                _ok_start, _ok_end = 10, 16
+            elif _month in (11, 12, 1, 2):
+                _ok_start, _ok_end = 11, 14
+            else:
+                _ok_start, _ok_end = 10, 15
+            _in_window  = _ok_start <= _h <= _ok_end
+            _time_badge = (
+                f"<span style='color:#4CAF50;font-weight:700'>✓ Vous êtes dans la bonne plage</span>"
+                if _in_window else
+                f"<span style='color:#FF9800;font-weight:700'>"
+                f"⚠ Il est {_now.strftime('%Hh%M')} — hors plage recommandée</span>"
+            )
+
+            st.markdown("### Avant de commencer")
+            st.markdown(
+                "<p style='color:#aaa;margin-top:-8px;margin-bottom:16px'>"
+                "Lisez ces 4 points pour obtenir un résultat fiable.</p>",
+                unsafe_allow_html=True,
+            )
+
+            _cards = [
+                {
+                    "icon": "☀️",
+                    "title": "Lumière naturelle",
+                    "body": (
+                        f"Prenez votre photo entre <strong>{_ok_start}h et {_ok_end}h</strong>, "
+                        f"près d'une fenêtre exposée au nord ou à l'est. "
+                        f"Pas de soleil direct dans les yeux.<br><br>{_time_badge}"
+                    ),
+                },
+                {
+                    "icon": "🪞",
+                    "title": "Positionnement",
+                    "body": (
+                        "Placez-vous <strong>de face</strong>, visage centré, "
+                        "à environ 50 cm de la caméra. "
+                        "Évitez les sources lumineuses dans le dos."
+                    ),
+                },
+                {
+                    "icon": "📄",
+                    "title": "Feuille A4 pliée en 2",
+                    "body": (
+                        "Pliez une feuille A4 blanche en deux et tenez-la "
+                        "<strong>à plat à côté de votre visage</strong>. "
+                        "Elle calibre la balance des blancs pour un sous-ton précis."
+                    ),
+                },
+                {
+                    "icon": "👁️",
+                    "title": "Yeux bien ouverts",
+                    "body": (
+                        "Gardez les <strong>yeux grands ouverts</strong> sur la photo. "
+                        "L'analyse de l'iris est essentielle pour affiner votre saison."
+                    ),
+                },
+            ]
+
+            for card in _cards:
+                st.markdown(
+                    f"<div style='display:flex;gap:14px;align-items:flex-start;"
+                    f"background:#1e1e1e;border-radius:10px;padding:14px 16px;"
+                    f"margin-bottom:10px;border:1px solid #2e2e2e'>"
+                    f"<span style='font-size:1.6rem;line-height:1.3'>{card['icon']}</span>"
+                    f"<div><div style='font-weight:700;margin-bottom:4px'>{card['title']}</div>"
+                    f"<div style='color:#ccc;font-size:0.9rem;line-height:1.5'>{card['body']}</div>"
+                    f"</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("J'ai compris, commencer l'analyse", type="primary", use_container_width=True):
+                st.session_state["guidance_seen"] = True
+                st.rerun()
+            st.stop()
 
         if "onboarding_step" not in st.session_state:
             st.session_state.onboarding_step = 0
