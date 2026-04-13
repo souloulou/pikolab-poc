@@ -135,19 +135,19 @@ SEASONS = {
     "Light Spring":  {"label": "Printemps Clair",   "warmth":  1.05, "depth": 1.56, "chroma": 3.44, "emoji": "🌤"},
     "Warm Spring":   {"label": "Printemps Chaud",   "warmth":  2.16, "depth": 2.36, "chroma": 3.44, "emoji": "🌸"},
     "Bright Spring": {"label": "Printemps Lumineux","warmth":  0.96, "depth": 2.24, "chroma": 4.56, "emoji": "✨"},
-    "True Spring":   {"label": "Printemps Vrai",    "warmth":  1.05, "depth": 1.96, "chroma": 3.76, "emoji": "🌼"},
+    "True Spring":   {"label": "Printemps Véritable","warmth":  1.05, "depth": 1.96, "chroma": 3.76, "emoji": "🌼"},
     "Light Summer":  {"label": "Été Clair",         "warmth": -1.14, "depth": 1.50, "chroma": 2.44, "emoji": "☁️"},
     "Cool Summer":   {"label": "Été Froid",         "warmth": -2.25, "depth": 2.56, "chroma": 2.50, "emoji": "🌊"},
     "Soft Summer":   {"label": "Été Doux",          "warmth": -0.90, "depth": 2.60, "chroma": 1.64, "emoji": "🌸"},
-    "True Summer":   {"label": "Été Vrai",          "warmth": -1.50, "depth": 2.10, "chroma": 2.36, "emoji": "🏖"},
+    "True Summer":   {"label": "Été Véritable",      "warmth": -1.50, "depth": 2.10, "chroma": 2.36, "emoji": "🏖"},
     "Soft Autumn":   {"label": "Automne Doux",      "warmth":  0.60, "depth": 3.44, "chroma": 1.64, "emoji": "🌾"},
     "Warm Autumn":   {"label": "Automne Chaud",     "warmth":  2.16, "depth": 3.50, "chroma": 3.36, "emoji": "🍂"},
     "Deep Autumn":   {"label": "Automne Profond",   "warmth":  1.65, "depth": 4.44, "chroma": 3.10, "emoji": "🍁"},
-    "True Autumn":   {"label": "Automne Vrai",      "warmth":  1.05, "depth": 3.90, "chroma": 2.76, "emoji": "🌰"},
+    "True Autumn":   {"label": "Automne Véritable",  "warmth":  1.05, "depth": 3.90, "chroma": 2.76, "emoji": "🌰"},
     "Deep Winter":   {"label": "Hiver Profond",     "warmth": -0.96, "depth": 4.50, "chroma": 3.44, "emoji": "🌑"},
     "Cool Winter":   {"label": "Hiver Froid",       "warmth": -2.25, "depth": 3.44, "chroma": 3.36, "emoji": "❄️"},
     "Bright Winter": {"label": "Hiver Brillant",    "warmth": -0.84, "depth": 3.50, "chroma": 4.56, "emoji": "💎"},
-    "True Winter":   {"label": "Hiver Vrai",        "warmth": -1.56, "depth": 4.00, "chroma": 3.50, "emoji": "🌨"},
+    "True Winter":   {"label": "Hiver Véritable",   "warmth": -1.56, "depth": 4.00, "chroma": 3.50, "emoji": "🌨"},
 }
 
 # ── Logique de scoring ─────────────────────────────────────────────────────────
