@@ -37,9 +37,11 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.sidebar.header("PikoLab")
-st.sidebar.page_link("app.py", label="Analyse", icon="🎨")
-st.sidebar.page_link("pages/scanner.py", label="Scanner", icon="📷")
-st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
+st.sidebar.page_link("app.py",                    label="Analyse",       icon="🎨")
+st.sidebar.page_link("pages/quiz.py",             label="Quiz",          icon="📋")
+st.sidebar.page_link("pages/scanner.py",          label="Scanner",       icon="📷")
+st.sidebar.page_link("pages/fond_de_teint.py",    label="Fond de teint", icon="💄")
+st.sidebar.page_link("pages/coach_ia.py",         label="Coach Iris",    icon="💬")
 
 # ---- Check context ----
 ctx = st.session_state.get("ctx")

@@ -1909,10 +1909,11 @@ def main():
 
     # ---- Sidebar (visible on desktop) ----
     st.sidebar.header("PikoLab")
-    st.sidebar.page_link("app.py", label="Analyse", icon="🎨")
-    st.sidebar.page_link("pages/scanner.py",       label="Scanner",       icon="📷")
-    st.sidebar.page_link("pages/fond_de_teint.py", label="Fond de teint", icon="💄")
-    st.sidebar.page_link("pages/coach_ia.py",      label="Coach Iris",    icon="💬")
+    st.sidebar.page_link("app.py",                    label="Analyse",       icon="🎨")
+    st.sidebar.page_link("pages/quiz.py",             label="Quiz",          icon="📋")
+    st.sidebar.page_link("pages/scanner.py",          label="Scanner",       icon="📷")
+    st.sidebar.page_link("pages/fond_de_teint.py",    label="Fond de teint", icon="💄")
+    st.sidebar.page_link("pages/coach_ia.py",         label="Coach Iris",    icon="💬")
     st.sidebar.markdown("---")
 
     if st.sidebar.button("Nouvelle analyse", use_container_width=True):
@@ -1964,6 +1965,35 @@ def main():
 
     # ---- Acquisition ----
     image_rgb = None
+
+    # ---- Quiz gate ----
+    quiz_result = st.session_state.get("quiz_result")
+    if not quiz_result and "analysis_done" not in st.session_state:
+        st.markdown("## Bienvenue sur PikoLab 🎨")
+        st.markdown(
+            "Avant l'analyse photo, commencez par le **quiz colorimétrique** (2 min) "
+            "pour croiser les résultats et obtenir la classification la plus précise possible."
+        )
+        if st.button("Commencer le quiz →", type="primary", use_container_width=True):
+            st.switch_page("pages/quiz.py")
+        st.stop()
+
+    # ---- Bannière résultat quiz (si quiz fait) ----
+    if quiz_result:
+        emoji  = quiz_result.get("emoji", "🎨")
+        season = quiz_result.get("season", "")
+        conf   = quiz_result.get("confidence", 0)
+        runner = quiz_result.get("runner_up")
+        conf_color = "#4CAF50" if conf >= 75 else "#FF9800" if conf >= 55 else "#F44336"
+        runner_txt = f" · proche de {runner}" if runner else ""
+        st.markdown(
+            f"<div style='background:#1e1e1e;border-left:4px solid {conf_color};"
+            f"padding:10px 14px;border-radius:6px;margin-bottom:12px'>"
+            f"📋 <strong>Quiz :</strong> {emoji} {season}"
+            f"<span style='color:{conf_color};margin-left:8px'>({conf}% confiance{runner_txt})</span>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     # ---- Hero section (only before first analysis) ----
     hero_placeholder = st.empty()
