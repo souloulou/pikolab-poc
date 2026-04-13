@@ -1,6 +1,6 @@
 """
 Pipeline de validation colorimétrique hybride.
-3 sources : Quiz (25%) + CIELab algorithmique (35%) + 3 agents Vision Gemini (40%).
+2 sources : Quiz (25%) + 3 agents Vision Gemini (75%).
 Le contexte quiz est injecté dans chaque prompt Vision.
 """
 
@@ -37,8 +37,7 @@ SEASON_TO_BASE = {s: base for base, seasons in BASE_TO_SEASONS.items() for s in 
 
 # Poids des sources
 _W_QUIZ   = 0.25
-_W_ALGO   = 0.15
-_W_VISION = 0.60   # partagé entre les 3 agents Vision
+_W_VISION = 0.75   # partagé entre les 3 agents Vision
 
 # ── Construction du contexte quiz ─────────────────────────────────────────────
 
@@ -220,14 +219,13 @@ def _synthesize(
     vision_results: list[dict],
 ) -> tuple[str, str, str]:
     """
-    Combine Quiz + CIELab + agents Vision → (saison finale, base, accord).
+    Combine Quiz + agents Vision → (saison finale, base, accord).
+    CIELab retiré : trop peu fiable en conditions réelles.
     """
-    algo_base = SEASON_TO_BASE.get(algo_season, "")
     quiz_base = SEASON_TO_BASE.get(quiz_season, "") if quiz_season else None
 
     # Vote pondéré sur la base
     base_weights: dict[str, float] = {}
-    base_weights[algo_base] = base_weights.get(algo_base, 0) + _W_ALGO
     if quiz_base:
         base_weights[quiz_base] = base_weights.get(quiz_base, 0) + _W_QUIZ * (quiz_confidence / 100)
     vision_weight_each = _W_VISION / max(len(vision_results), 1)
@@ -236,17 +234,17 @@ def _synthesize(
         if vb:
             base_weights[vb] = base_weights.get(vb, 0) + vision_weight_each * vr.get("confidence", 0.7)
 
-    consensus_base = max(base_weights, key=base_weights.get) if base_weights else algo_base
+    # Fallback si aucun résultat
+    consensus_base = max(base_weights, key=base_weights.get) if base_weights else algo_season and SEASON_TO_BASE.get(algo_season, "")
 
-    # Niveau d'accord (sur toutes les sources)
+    # Niveau d'accord (Quiz + Vision uniquement)
     all_bases = (
-        [algo_base]
-        + ([quiz_base] if quiz_base else [])
+        ([quiz_base] if quiz_base else [])
         + [vr.get("base_season", "") for vr in vision_results]
     )
-    agreeing     = sum(1 for b in all_bases if b == consensus_base)
+    agreeing      = sum(1 for b in all_bases if b == consensus_base)
     total_sources = len(all_bases)
-    if agreeing == total_sources:
+    if agreeing == total_sources and total_sources > 0:
         agreement = "unanimite"
     elif agreeing >= max(2, (total_sources + 1) // 2):
         agreement = "majorite"
@@ -255,8 +253,6 @@ def _synthesize(
 
     # Sous-saison : vote pondéré parmi les sources qui s'accordent sur la base
     sub_votes: dict[str, float] = {}
-    if algo_base == consensus_base:
-        sub_votes[algo_season] = sub_votes.get(algo_season, 0) + _W_ALGO
     if quiz_season and quiz_base == consensus_base:
         sub_votes[quiz_season] = sub_votes.get(quiz_season, 0) + _W_QUIZ * (quiz_confidence / 100)
     for vr in vision_results:
@@ -283,26 +279,17 @@ def run_consensus_analysis(
     quiz_result: dict | None = None,
 ) -> dict:
     """
-    Validation hybride : Quiz + CIELab + 3 agents Vision Gemini.
+    Validation hybride : Quiz (25%) + 3 agents Vision Gemini (75%).
     Le contexte quiz est injecté dans chaque prompt Vision.
+    CIELab retiré du vote — conservé uniquement comme fallback d'urgence.
     """
     image_b64   = _image_to_b64(image_rgb)
-    algo_base   = SEASON_TO_BASE.get(algo_season, "")
     quiz_season = quiz_result.get("season") if quiz_result else None
     quiz_conf   = quiz_result.get("confidence", 0) if quiz_result else 0
     quiz_ctx    = _quiz_context_str(quiz_result)
 
-    # Source 1 : CIELab algorithmique
-    agents_results = [{
-        "name": "Algo (CIELab)",
-        "sub_season": algo_season,
-        "base_season": algo_base,
-        "temperature": "chaud" if algo_base in ("Spring", "Autumn") else "froid",
-        "confidence": algo_confidence,
-        "reasoning": "Analyse CIELab peau (70%) + iris (30%)",
-    }]
-
-    # Source 2 : Quiz (si disponible)
+    # Source 1 : Quiz (si disponible)
+    agents_results = []
     if quiz_season and quiz_season in VALID_SEASONS:
         agents_results.append({
             "name": "Quiz colorimétrique",
@@ -313,7 +300,7 @@ def run_consensus_analysis(
             "reasoning": f"Questionnaire : teint, yeux, veines, cheveux, cernes ({quiz_conf}% confiance)",
         })
 
-    # Source 3 : 3 agents Vision Gemini avec contexte quiz injecté
+    # Source 2 : 3 agents Vision Gemini avec contexte quiz injecté
     errors = []
     vision_results = []
     for cfg in _build_agents(quiz_ctx):
