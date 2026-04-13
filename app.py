@@ -635,12 +635,15 @@ def detect_white_region(image_rgb):
     a_ch = lab[:, :, 1].astype(int)
     b_ch = lab[:, :, 2].astype(int)
 
-    # Thresholds: bright AND sufficiently neutral
-    # Slightly relaxed to handle folded A4 (smaller area, possible fold shadow)
+    # Thresholds: bright AND sufficiently neutral.
+    # b* is intentionally relaxed (< 40) : under warm/yellow light the sheet
+    # picks up the illuminant cast — that cast is exactly what we want to measure,
+    # so we must not reject the sheet because of it.
+    # a* stays tighter (< 22) : white paper never goes strongly green or magenta.
     white_mask = (
-        (l_ch > 175)
+        (l_ch > 170)
         & (np.abs(a_ch - 128) < 22)
-        & (np.abs(b_ch - 128) < 22)
+        & (np.abs(b_ch - 128) < 40)
     ).astype(np.uint8) * 255
 
     # Morphological cleanup to remove noise
@@ -686,10 +689,10 @@ def detect_white_region(image_rgb):
         mean_a = cv2.mean(a_ch.astype(np.uint8), mask=region_mask)[0]
         mean_b = cv2.mean(b_ch.astype(np.uint8), mask=region_mask)[0]
 
-        if mean_l < 185:
+        if mean_l < 178:
             continue  # Not bright enough
-        if abs(mean_a - 128) > 18 or abs(mean_b - 128) > 18:
-            continue  # Not neutral enough
+        if abs(mean_a - 128) > 20 or abs(mean_b - 128) > 38:
+            continue  # Not neutral enough (b* relaxed for warm/yellow light)
 
         return np.array(cv2.mean(image_rgb, mask=region_mask)[:3])
 
