@@ -4,11 +4,14 @@ Trouve le fond de teint le plus adapte a ton teint reel,
 et decouvre les blush et rouges a levres les mieux accordes.
 """
 
+import io
 import json
 import sys
 from pathlib import Path
+import cv2
 import numpy as np
 import streamlit as st
+from PIL import Image
 from skimage.color import rgb2lab
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -125,9 +128,114 @@ def delta_e_label(de: float) -> tuple[str, str]:
     return "🔴", f"Teinte eloignee (ΔE {de:.1f})"
 
 
+def extract_jaw_L(image_rgb: np.ndarray) -> float | None:
+    """
+    Extrait le L* de référence fond de teint depuis une photo de profil/45°.
+
+    Stratégie :
+    1. Essaie MediaPipe pour cibler la zone mâchoire si la tête est suffisamment de face.
+    2. Fallback : filtrage Lab par plage peau sur la région centrale de l'image.
+    Dans les deux cas, retourne le 70e percentile de L* des pixels peau trouvés.
+    """
+    # Essai MediaPipe
+    try:
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        from app import detect_face, JAWLINE_IDX, pixels_to_lab
+        landmarks = detect_face(image_rgb)
+        if landmarks and len(landmarks) > max(JAWLINE_IDX):
+            # Construire un masque sur la zone basse de la mâchoire (tiers inférieur du visage)
+            h, w = image_rgb.shape[:2]
+            jaw_pts = [landmarks[i] for i in JAWLINE_IDX]
+            chin_y  = max(p[1] for p in jaw_pts)
+            face_top = min(p[1] for p in jaw_pts)
+            face_h   = max(1, chin_y - face_top)
+            # Bande : du tiers inférieur jusqu'au menton
+            band_top = int(chin_y - face_h * 0.35)
+            band_bot = chin_y
+            left_x   = min(p[0] for p in jaw_pts) + int(w * 0.05)
+            right_x  = max(p[0] for p in jaw_pts) - int(w * 0.05)
+            mask = np.zeros((h, w), dtype=np.uint8)
+            cv2.rectangle(mask, (left_x, band_top), (right_x, band_bot), 255, -1)
+            jaw_pixels = image_rgb[mask > 0].reshape(-1, 3)
+            if len(jaw_pixels) >= 50:
+                lab = pixels_to_lab(jaw_pixels)
+                C = np.sqrt(lab[:, 1] ** 2 + lab[:, 2] ** 2)
+                clean = lab[C <= np.percentile(C, 75)]
+                if len(clean) >= 20:
+                    return float(np.percentile(clean[:, 0], 70))
+    except Exception:
+        pass  # MediaPipe indisponible ou profil trop marqué → fallback
+
+    # Fallback : filtrage Lab sur région centrale (évite le fond)
+    h, w = image_rgb.shape[:2]
+    region = image_rgb[int(h * 0.15):int(h * 0.85), int(w * 0.15):int(w * 0.85)]
+    lab_all = rgb2lab(region.astype(np.float64) / 255.0).reshape(-1, 3)
+    # Plage peau : L* 28–92, a* 4–22, b* 4–32
+    skin_mask = (
+        (lab_all[:, 0] >= 28) & (lab_all[:, 0] <= 92) &
+        (lab_all[:, 1] >= 4)  & (lab_all[:, 1] <= 22) &
+        (lab_all[:, 2] >= 4)  & (lab_all[:, 2] <= 32)
+    )
+    skin_px = lab_all[skin_mask]
+    if len(skin_px) < 50:
+        return None
+    return float(np.percentile(skin_px[:, 0], 70))
+
+
+# ── Photo mâchoire (optionnelle) ───────────────────────────────────────────────
+
+def _jaw_photo_section() -> float | None:
+    """
+    Section UI pour la photo de profil/45°.
+    Retourne le L* mesuré si une photo est fournie et traitée avec succès, sinon None.
+    """
+    with st.expander("📸 Photo mâchoire — référence fond de teint (optionnel)", expanded=False):
+        st.markdown(
+            "Pour un matching plus précis, prenez une photo **de profil ou à 45°** "
+            "qui expose votre mâchoire et votre cou **sans ombre portée**.\n\n"
+            "**Comment faire :** tournez la tête d'environ 45°, éclairage frontal, "
+            "mâchoire bien visible. Pas besoin de feuille blanche."
+        )
+        jaw_img_file = st.camera_input(
+            "Photo mâchoire / cou",
+            key="jaw_photo",
+            help="Profil ou 45° — mâchoire et cou visibles, bien éclairés",
+        )
+        if jaw_img_file is None:
+            jaw_img_file = st.file_uploader(
+                "Ou importer une photo",
+                type=["jpg", "jpeg", "png"],
+                key="jaw_photo_upload",
+            )
+        if jaw_img_file is not None:
+            pil_img = Image.open(io.BytesIO(jaw_img_file.read())).convert("RGB")
+            img_rgb = np.array(pil_img)
+            with st.spinner("Analyse de la mâchoire..."):
+                jaw_L = extract_jaw_L(img_rgb)
+            if jaw_L is not None:
+                st.success(f"Clarté mâchoire mesurée : **L* {jaw_L:.1f}** (utilisée pour le matching)")
+                # Aperçu miniature
+                st.image(pil_img, width=220, caption="Photo analysée")
+                return jaw_L
+            else:
+                st.warning(
+                    "Pas assez de pixels peau détectés. "
+                    "Vérifiez que la mâchoire est bien visible et éclairée."
+                )
+    return None
+
+
 # ── En-tête ────────────────────────────────────────────────────────────────────
 st.markdown("## 💄 Fond de teint & Maquillage")
 st.caption(f"Profil actif : **{season}**")
+
+# Photo mâchoire optionnelle — surcharge skin_L si mesurée
+_jaw_L = _jaw_photo_section()
+if _jaw_L is not None:
+    skin_L = _jaw_L
+    _source_label = f"mâchoire (photo) L* {skin_L:.1f}"
+else:
+    _source_label = f"visage frontal L* {skin_L:.1f}"
 
 skin_hex_approx = "#{:02X}{:02X}{:02X}".format(
     min(255, max(0, int(skin_L * 2.0))),
@@ -139,9 +247,11 @@ col1, col2, col3 = st.columns(3)
 col1.metric(
     "Clarté teint (L*)",
     f"{skin_L:.1f}",
-    delta=f"moy. brute {_skin_L_raw:.1f}" if abs(skin_L - _skin_L_raw) > 1 else None,
+    delta=_source_label if _jaw_L is not None else (
+        f"moy. brute {_skin_L_raw:.1f}" if abs(skin_L - _skin_L_raw) > 1 else None
+    ),
     delta_color="off",
-    help="70e percentile de L* (zones bien éclairées). La moyenne brute inclut les ombres et sous-estime la clarté réelle.",
+    help="Source : photo mâchoire si fournie, sinon 70e percentile L* visage frontal.",
 )
 col2.metric("Sous-ton rouge/vert (a*)", f"{skin_a:.1f}")
 col3.metric("Sous-ton chaud/froid (b*)", f"{skin_b:.1f}")
