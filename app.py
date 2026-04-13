@@ -1857,45 +1857,68 @@ def _render_consensus_block(consensus_data: dict) -> None:
     overridden = consensus_data["overridden"]
     base_votes = consensus_data.get("base_votes", {})
 
-    # Résumé des votes saison de base
     votes_str = " · ".join(
         f"{_BASE_ICONS.get(b, '')} {b} ×{n}"
         for b, n in sorted(base_votes.items(), key=lambda x: -x[1])
     )
-
     override_note = " (corrige l'algorithme)" if overridden else " (confirme l'algorithme)"
 
-    with st.expander(f"Analyse multi-agents — {label}{override_note}", expanded=overridden):
+    # ── Agents Vision : toujours affichés, mis en avant ──────────────────────
+    agents = consensus_data.get("agents", [])
+    vision_agents = [a for a in agents if a["name"].startswith("Vision")]
+    other_agents  = [a for a in agents if not a["name"].startswith("Vision")]
+
+    if vision_agents:
+        st.markdown("#### Analyse des agents Vision")
+        for agent in vision_agents:
+            base     = agent.get("base_season", "")
+            icon     = _BASE_ICONS.get(base, "")
+            conf_pct = int(agent.get("confidence", 0) * 100)
+            is_ok    = agent["sub_season"] == consensus_season
+            marker   = " ✓" if is_ok else ""
+            temp     = {"chaud": "chaud 🔥", "froid": "froid ❄️", "neutre": "neutre"}.get(
+                            agent.get("temperature", ""), "")
+            conf_color = "#4CAF50" if conf_pct >= 80 else "#FF9800" if conf_pct >= 60 else "#aaa"
+
+            st.markdown(
+                f"<div style='background:#1e1e1e;border-radius:8px;padding:12px;margin-bottom:8px'>"
+                f"<span style='font-weight:700'>{agent['name']}</span>"
+                f"&nbsp;&nbsp;<code>{agent['sub_season']}{marker}</code>"
+                f"&nbsp; {icon} {base} &nbsp;·&nbsp; {temp}"
+                f"&nbsp;&nbsp;<span style='color:{conf_color};font-weight:700'>confiance {conf_pct}%</span>"
+                f"{ ('<br><span style=\"color:#ccc;font-size:13px\">' + agent['reasoning'] + '</span>') if agent.get('reasoning') else ''}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+
+    # ── Sources algorithmiques : dans un expander ─────────────────────────────
+    with st.expander(f"Sources algorithmiques — {label}{override_note}", expanded=overridden):
         st.markdown(
             f"<span style='color:{color}; font-weight:700;'>● {label}</span> "
             f"&nbsp;|&nbsp; Votes base : {votes_str}",
             unsafe_allow_html=True,
         )
-
-        agents = consensus_data.get("agents", [])
-        for agent in agents:
-            base = agent.get("base_season", "")
-            icon = _BASE_ICONS.get(base, "")
+        for agent in other_agents:
+            base     = agent.get("base_season", "")
+            icon     = _BASE_ICONS.get(base, "")
             conf_pct = int(agent.get("confidence", 0) * 100)
-            is_consensus = agent["sub_season"] == consensus_season
-            marker = " ✓" if is_consensus else ""
-            temp = agent.get("temperature", "")
-            temp_label = {"chaud": "chaud", "froid": "froid", "neutre": "neutre"}.get(temp, temp)
-
+            is_ok    = agent["sub_season"] == consensus_season
+            marker   = " ✓" if is_ok else ""
+            temp     = {"chaud": "chaud", "froid": "froid", "neutre": "neutre"}.get(
+                            agent.get("temperature", ""), "")
             st.markdown(
                 f"**{agent['name']}** — `{agent['sub_season']}`{marker} "
-                f"&nbsp;·&nbsp; {icon} {base} &nbsp;·&nbsp; {temp_label} &nbsp;·&nbsp; "
+                f"&nbsp;·&nbsp; {icon} {base} &nbsp;·&nbsp; {temp} &nbsp;·&nbsp; "
                 f"confiance {conf_pct} %",
-                unsafe_allow_html=False,
             )
             if agent.get("reasoning"):
                 st.caption(agent["reasoning"])
 
-        errors = consensus_data.get("errors", [])
-        if errors:
-            with st.expander("Erreurs agents", expanded=False):
-                for e in errors:
-                    st.warning(e)
+    errors = consensus_data.get("errors", [])
+    if errors:
+        with st.expander("Erreurs agents", expanded=False):
+            for e in errors:
+                st.warning(e)
 
 
 def main():
