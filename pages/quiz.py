@@ -118,9 +118,11 @@ QUESTIONS = [
         "step": 6,
         "title": "Les marques laissées par vos imperfections",
         "subtitle": "Après qu'un bouton ou une rougeur guérit, quelle trace reste-t-il sur votre peau ?",
+        "multi": True,
+        "max_select": 2,
         "weight": {"warmth": 1.5, "depth": 0, "chroma": 0.5},
         "options": [
-            {"id": "blemish-purple",   "label": "Une tache violacée ou mauve", "sublabel": "La marque vire au violet, mauve ou bordeaux froid",      "hex": "#907090", "scores": {"warmth": -2,   "depth": 2.5, "chroma": 1.5}},
+            {"id": "blemish-purple",   "label": "Une tache violacée ou mauve", "sublabel": "La marque vire au violet, mauve ou bordeaux froid",      "hex": "#907090", "scores": {"warmth": -0.5, "depth": 3.5, "chroma": 1.5}},
             {"id": "blemish-pink-red", "label": "Une tache rose ou rosée",    "sublabel": "La marque reste rose ou rouge rosé",                       "hex": "#E07080", "scores": {"warmth": -1.5, "depth": 2.5, "chroma": 2.0}},
             {"id": "blemish-red",      "label": "Une tache rouge ou orangée", "sublabel": "La marque reste rouge vif ou rouge-orangé",               "hex": "#D04030", "scores": {"warmth": 1,    "depth": 2.5, "chroma": 2.5}},
             {"id": "blemish-brown",    "label": "Une tache brune ou miel",    "sublabel": "La marque vire au brun, caramel ou hyperpigmentation chaude","hex": "#A06040", "scores": {"warmth": 2,    "depth": 3.5, "chroma": 1.0}},
@@ -162,11 +164,21 @@ def compute_scores(answers: dict) -> dict:
         answer_id = answers.get(qid)
         if not answer_id:
             continue
-        opt = next((o for o in q.get("options", []) if o["id"] == answer_id), None)
-        if not opt:
-            continue
         w = q["weight"]
-        s = opt["scores"]
+        # Multi-select : moyenne des scores des options choisies
+        if isinstance(answer_id, list):
+            if not answer_id:
+                continue
+            selected_opts = [o for o in q.get("options", []) if o["id"] in answer_id]
+            if not selected_opts:
+                continue
+            s = {dim: sum(o["scores"][dim] for o in selected_opts) / len(selected_opts)
+                 for dim in ("warmth", "depth", "chroma")}
+        else:
+            opt = next((o for o in q.get("options", []) if o["id"] == answer_id), None)
+            if not opt:
+                continue
+            s = opt["scores"]
         for dim in ("warmth", "depth", "chroma"):
             total[dim] += s[dim] * w[dim]
             weights[dim] += w[dim]
@@ -295,8 +307,16 @@ st.caption(question["subtitle"])
 st.markdown("")
 
 # Grille de swatches (2 colonnes)
-options  = question.get("options", [])
-selected = answers.get(question["id"])
+options    = question.get("options", [])
+is_multi   = question.get("multi", False)
+max_select = question.get("max_select", 1)
+selected   = answers.get(question["id"])
+
+if is_multi:
+    if not isinstance(selected, list):
+        selected = []
+    if max_select > 1:
+        st.caption(f"Sélectionnez jusqu'à {max_select} réponses.")
 
 if options:
     cols_per_row = 2
@@ -305,10 +325,21 @@ if options:
         cols = st.columns(cols_per_row)
         for i, opt in enumerate(row):
             with cols[i]:
-                is_selected = (selected == opt["id"])
-                if swatch_button(opt, is_selected, key=f"{question['id']}_{opt['id']}"):
-                    st.session_state.quiz_answers[question["id"]] = opt["id"]
-                    st.rerun()
+                if is_multi:
+                    is_selected = opt["id"] in selected
+                    if swatch_button(opt, is_selected, key=f"{question['id']}_{opt['id']}"):
+                        current = list(selected)
+                        if opt["id"] in current:
+                            current.remove(opt["id"])
+                        elif len(current) < max_select:
+                            current.append(opt["id"])
+                        st.session_state.quiz_answers[question["id"]] = current
+                        st.rerun()
+                else:
+                    is_selected = (selected == opt["id"])
+                    if swatch_button(opt, is_selected, key=f"{question['id']}_{opt['id']}"):
+                        st.session_state.quiz_answers[question["id"]] = opt["id"]
+                        st.rerun()
 
 st.markdown("---")
 
@@ -322,7 +353,11 @@ with col_prev:
             st.rerun()
 
 with col_next:
-    can_next = question["id"] in answers
+    answer_val = answers.get(question["id"])
+    if question.get("multi"):
+        can_next = isinstance(answer_val, list) and len(answer_val) > 0
+    else:
+        can_next = question["id"] in answers
     if step < n_steps - 1:
         if st.button("Suivant →", type="primary", use_container_width=True, disabled=not can_next):
             st.session_state.quiz_step += 1
