@@ -116,14 +116,14 @@ QUESTIONS = [
     {
         "id": "blemishes",
         "step": 6,
-        "title": "Vos imperfections",
-        "subtitle": "Quand un bouton ou une rougeur apparaît, quelle couleur a-t-il plutôt ?",
+        "title": "Les marques laissées par vos imperfections",
+        "subtitle": "Après qu'un bouton ou une rougeur guérit, quelle trace reste-t-il sur votre peau ?",
         "weight": {"warmth": 1.5, "depth": 0, "chroma": 0.5},
         "options": [
-            {"id": "blemish-pink-red", "label": "Rose vif ou rouge rosé","sublabel": "Rougeurs roses, boutons rose-rouge froid", "hex": "#E07080", "scores": {"warmth": -1.5, "depth": 2.5, "chroma": 2.0}},
-            {"id": "blemish-red",      "label": "Rouge vif",            "sublabel": "Rouge classique, rouge-orange, inflammé",    "hex": "#D04030", "scores": {"warmth": 1,    "depth": 2.5, "chroma": 2.5}},
-            {"id": "blemish-brown",    "label": "Brun / Miel",          "sublabel": "Taches post-acné marron, hyperpigmentation", "hex": "#A06040", "scores": {"warmth": 2,    "depth": 3.5, "chroma": 1.0}},
-            {"id": "blemish-rare",     "label": "Rarement / Indéfini",  "sublabel": "Peau nette ou imperfections peu colorées",   "hex": "#D0B8A8", "scores": {"warmth": 0,    "depth": 0,   "chroma": 0.0}},
+            {"id": "blemish-pink-red", "label": "Une tache rose ou rosée",    "sublabel": "La marque reste rose, rouge rosé ou légèrement violacée", "hex": "#E07080", "scores": {"warmth": -1.5, "depth": 2.5, "chroma": 2.0}},
+            {"id": "blemish-red",      "label": "Une tache rouge ou orangée", "sublabel": "La marque reste rouge vif ou rouge-orangé",               "hex": "#D04030", "scores": {"warmth": 1,    "depth": 2.5, "chroma": 2.5}},
+            {"id": "blemish-brown",    "label": "Une tache brune ou miel",    "sublabel": "La marque vire au brun, caramel ou hyperpigmentation chaude","hex": "#A06040", "scores": {"warmth": 2,    "depth": 3.5, "chroma": 1.0}},
+            {"id": "blemish-rare",     "label": "Aucune trace visible",       "sublabel": "La peau cicatrise sans laisser de marque colorée",         "hex": "#D0B8A8", "scores": {"warmth": 0,    "depth": 0,   "chroma": 0.0}},
         ],
     },
 ]
