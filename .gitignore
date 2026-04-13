@@ -9,3 +9,4 @@ tests/fixtures/test_face.jpg
 dist/
 build/
 .env
+dev_session.json

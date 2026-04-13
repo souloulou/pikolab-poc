@@ -281,6 +281,12 @@ st.markdown("### 🔍 Trouver mon fond de teint")
 
 skin_lab = np.array([skin_L, skin_a, skin_b])
 
+# Filtrage dur par sous-ton : une erreur de sous-ton est pire qu'une erreur de profondeur.
+# Saison chaude (Spring/Autumn) → warm + neutral uniquement.
+# Saison froide (Summer/Winter) → cool + neutral uniquement.
+_family = season_family(season)
+_allowed_undertones = {"warm", "neutral"} if _family == "warm" else {"cool", "neutral"}
+
 # Sélection marque
 brands = list(FOUNDATIONS_DB.keys())
 selected_brand = st.selectbox("Marque", brands)
@@ -291,45 +297,47 @@ selected_product = st.selectbox("Gamme", products)
 
 shades = FOUNDATIONS_DB[selected_brand][selected_product]
 
-# Calcul ΔE pour chaque teinte
-scored = []
-for shade in shades:
-    shade_lab = hex_to_lab(shade["hex"])
-    de = delta_e(skin_lab, shade_lab)
-    scored.append({**shade, "delta_e": de, "shade_lab": shade_lab})
+# Filtrage + calcul ΔE
+compatible = [s for s in shades if s.get("undertone", "neutral") in _allowed_undertones]
+if not compatible:
+    compatible = shades  # fallback si la gamme n'a aucune teinte compatible
 
-scored.sort(key=lambda x: x["delta_e"])
+scored = sorted(
+    [{**s, "delta_e": delta_e(skin_lab, hex_to_lab(s["hex"]))} for s in compatible],
+    key=lambda x: x["delta_e"],
+)
 
-# Affichage top 5
-st.markdown(f"**Top 5 teintes les plus proches — {selected_brand} {selected_product}**")
+# ── Recommandation unique ──────────────────────────────────────────────────────
+best = scored[0]
+emoji_b, label_b = delta_e_label(best["delta_e"])
+undertone_fr_b = {"warm": "Chaud", "cool": "Froid", "neutral": "Neutre"}.get(
+    best["undertone"], best["undertone"]
+)
+st.markdown(f"**Recommandation — {selected_brand} {selected_product}**")
+st.markdown(
+    f"<div style='display:flex;align-items:center;gap:16px;padding:16px;"
+    f"background:#1e1e1e;border-radius:10px;border:1px solid #33333380'>"
+    f"<div style='width:56px;height:56px;background:{best['hex']};"
+    f"border-radius:10px;border:1px solid #55555540;flex-shrink:0'></div>"
+    f"<div>"
+    f"<div style='font-size:1.1rem;font-weight:700'>{best['ref']} — {best['name']}</div>"
+    f"<div style='margin-top:4px'>{emoji_b} {label_b}</div>"
+    f"<div style='color:#aaa;font-size:0.85rem;margin-top:2px'>Sous-ton : {undertone_fr_b}</div>"
+    f"</div></div>",
+    unsafe_allow_html=True,
+)
 
-for i, s in enumerate(scored[:5]):
-    emoji, label = delta_e_label(s["delta_e"])
-    undertone_fr = {"warm": "Chaud", "cool": "Froid", "neutral": "Neutre"}.get(s["undertone"], s["undertone"])
-
-    with st.container(border=True):
-        c1, c2 = st.columns([1, 6])
-        with c1:
-            st.markdown(
-                f"<div style='width:44px;height:44px;background:{s['hex']};"
-                f"border-radius:8px;border:1px solid #55555540;margin-top:4px'></div>",
-                unsafe_allow_html=True,
-            )
-        with c2:
-            st.markdown(
-                f"**{s['ref']}** — {s['name']}  \n"
-                f"{emoji} {label}  \n"
-                f"Sous-ton : {undertone_fr}"
-            )
-
-# Toutes les teintes (expandable)
-with st.expander("Voir toutes les teintes classées"):
-    for s in scored:
-        emoji, label = delta_e_label(s["delta_e"])
+# Teintes exclues (mauvais sous-ton) dans un expander discret
+excluded = [s for s in shades if s.get("undertone", "neutral") not in _allowed_undertones]
+with st.expander(f"Teintes exclues — sous-ton incompatible ({len(excluded)} teintes)"):
+    st.caption(
+        f"Votre saison **{season}** est {'chaude' if _family == 'warm' else 'froide'} — "
+        f"les teintes {'froides' if _family == 'warm' else 'chaudes'} ont été écartées."
+    )
+    for s in excluded:
         undertone_fr = {"warm": "Chaud", "cool": "Froid", "neutral": "Neutre"}.get(s["undertone"], s["undertone"])
         st.markdown(
-            color_swatch(s["hex"]) +
-            f"**{s['ref']}** {s['name']} — {emoji} {label} — Sous-ton {undertone_fr}",
+            color_swatch(s["hex"]) + f"~~{s['ref']} {s['name']}~~ — Sous-ton {undertone_fr}",
             unsafe_allow_html=True,
         )
 
