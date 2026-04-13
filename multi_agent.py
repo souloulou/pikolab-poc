@@ -36,9 +36,9 @@ BASE_TO_SEASONS = {
 SEASON_TO_BASE = {s: base for base, seasons in BASE_TO_SEASONS.items() for s in seasons}
 
 # Poids des sources
-_W_QUIZ   = 0.15
+_W_QUIZ   = 0.25
 _W_ALGO   = 0.20
-_W_VISION = 0.65   # partagé entre les 3 agents Vision
+_W_VISION = 0.55   # partagé entre les 3 agents Vision
 
 # ── Construction du contexte quiz ─────────────────────────────────────────────
 
