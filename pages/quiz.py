@@ -128,24 +128,26 @@ QUESTIONS = [
     },
 ]
 
-# Saisons avec scores de référence (warmth, depth, chroma)
+# 16 saisons exactes (noms anglais = noms de app.py) avec labels français et scores
+# Scores dérivés des SEASON_CENTROIDS de app.py :
+#   warmth = temp * 3  |  depth = 3 - val*2  |  chroma = 3 + sat*2
 SEASONS = {
-    "Printemps Vrai":    {"warmth": 2.5,  "depth": 2.0, "chroma": 4.0, "emoji": "🌸"},
-    "Printemps Clair":   {"warmth": 1.5,  "depth": 1.5, "chroma": 4.5, "emoji": "🌼"},
-    "Printemps Lumineux":{"warmth": 1.5,  "depth": 2.5, "chroma": 4.5, "emoji": "✨"},
-    "Automne Vrai":      {"warmth": 2.5,  "depth": 3.5, "chroma": 2.5, "emoji": "🍂"},
-    "Automne Doux":      {"warmth": 1.5,  "depth": 3.0, "chroma": 1.5, "emoji": "🌾"},
-    "Automne Profond":   {"warmth": 2.0,  "depth": 4.5, "chroma": 2.0, "emoji": "🍁"},
-    "Été Vrai":          {"warmth": -1.5, "depth": 2.5, "chroma": 1.5, "emoji": "🌊"},
-    "Été Clair":         {"warmth": -1.0, "depth": 1.5, "chroma": 2.0, "emoji": "🌤"},
-    "Été Doux":          {"warmth": -0.5, "depth": 3.0, "chroma": 1.0, "emoji": "🌸"},
-    "Hiver Vrai":        {"warmth": -2.0, "depth": 3.5, "chroma": 4.0, "emoji": "❄️"},
-    "Hiver Sombre":      {"warmth": -1.5, "depth": 4.5, "chroma": 3.5, "emoji": "🌑"},
-    "Hiver Brillant":    {"warmth": -1.0, "depth": 3.0, "chroma": 4.5, "emoji": "💎"},
-    "Automne-Hiver":     {"warmth": 0.5,  "depth": 4.0, "chroma": 2.5, "emoji": "🌰"},
-    "Printemps-Été":     {"warmth": 1.0,  "depth": 2.0, "chroma": 3.0, "emoji": "🌺"},
-    "Été-Automne":       {"warmth": 0.5,  "depth": 3.0, "chroma": 2.0, "emoji": "🍃"},
-    "Hiver-Printemps":   {"warmth": -0.5, "depth": 2.5, "chroma": 3.5, "emoji": "🌷"},
+    "Light Spring":  {"label": "Printemps Clair",   "warmth":  1.05, "depth": 1.56, "chroma": 3.44, "emoji": "🌤"},
+    "Warm Spring":   {"label": "Printemps Chaud",   "warmth":  2.16, "depth": 2.36, "chroma": 3.44, "emoji": "🌸"},
+    "Bright Spring": {"label": "Printemps Lumineux","warmth":  0.96, "depth": 2.24, "chroma": 4.56, "emoji": "✨"},
+    "True Spring":   {"label": "Printemps Vrai",    "warmth":  1.05, "depth": 1.96, "chroma": 3.76, "emoji": "🌼"},
+    "Light Summer":  {"label": "Été Clair",         "warmth": -1.14, "depth": 1.50, "chroma": 2.44, "emoji": "☁️"},
+    "Cool Summer":   {"label": "Été Froid",         "warmth": -2.25, "depth": 2.56, "chroma": 2.50, "emoji": "🌊"},
+    "Soft Summer":   {"label": "Été Doux",          "warmth": -0.90, "depth": 2.60, "chroma": 1.64, "emoji": "🌸"},
+    "True Summer":   {"label": "Été Vrai",          "warmth": -1.50, "depth": 2.10, "chroma": 2.36, "emoji": "🏖"},
+    "Soft Autumn":   {"label": "Automne Doux",      "warmth":  0.60, "depth": 3.44, "chroma": 1.64, "emoji": "🌾"},
+    "Warm Autumn":   {"label": "Automne Chaud",     "warmth":  2.16, "depth": 3.50, "chroma": 3.36, "emoji": "🍂"},
+    "Deep Autumn":   {"label": "Automne Profond",   "warmth":  1.65, "depth": 4.44, "chroma": 3.10, "emoji": "🍁"},
+    "True Autumn":   {"label": "Automne Vrai",      "warmth":  1.05, "depth": 3.90, "chroma": 2.76, "emoji": "🌰"},
+    "Deep Winter":   {"label": "Hiver Profond",     "warmth": -0.96, "depth": 4.50, "chroma": 3.44, "emoji": "🌑"},
+    "Cool Winter":   {"label": "Hiver Froid",       "warmth": -2.25, "depth": 3.44, "chroma": 3.36, "emoji": "❄️"},
+    "Bright Winter": {"label": "Hiver Brillant",    "warmth": -0.84, "depth": 3.50, "chroma": 4.56, "emoji": "💎"},
+    "True Winter":   {"label": "Hiver Vrai",        "warmth": -1.56, "depth": 4.00, "chroma": 3.50, "emoji": "🌨"},
 }
 
 # ── Logique de scoring ─────────────────────────────────────────────────────────
@@ -174,11 +176,11 @@ def compute_scores(answers: dict) -> dict:
     }
 
 
-def season_distance(scores: dict, season_scores: dict) -> float:
+def season_distance(scores: dict, season_data: dict) -> float:
     return (
-        ((scores["warmth"] - season_scores["warmth"]) * 1.5) ** 2
-        + (scores["depth"] - season_scores["depth"]) ** 2
-        + (scores["chroma"] - season_scores["chroma"]) ** 2
+        ((scores["warmth"] - season_data["warmth"]) * 1.5) ** 2
+        + (scores["depth"]  - season_data["depth"])  ** 2
+        + (scores["chroma"] - season_data["chroma"]) ** 2
     )
 
 
@@ -188,18 +190,20 @@ def determine_season(answers: dict) -> dict:
         SEASONS.items(),
         key=lambda item: season_distance(scores, item[1])
     )
-    best_name, best_s   = ranked[0]
-    second_name, second_s = ranked[1]
+    best_id,   best_s   = ranked[0]
+    second_id, second_s = ranked[1]
 
     gap        = season_distance(scores, second_s) - season_distance(scores, best_s)
     confidence = min(100, round(50 + gap * 15))
 
     return {
-        "season":     best_name,
-        "emoji":      best_s["emoji"],
-        "confidence": confidence,
-        "runner_up":  second_name if confidence < 75 else None,
-        "scores":     scores,
+        "season":        best_id,                          # nom anglais = clé app.py
+        "season_label":  best_s["label"],                  # nom français pour affichage
+        "emoji":         best_s["emoji"],
+        "confidence":    confidence,
+        "runner_up":     second_id        if confidence < 75 else None,
+        "runner_up_label": second_s["label"] if confidence < 75 else None,
+        "scores":        scores,
     }
 
 # ── UI helpers ─────────────────────────────────────────────────────────────────
@@ -238,12 +242,12 @@ if st.session_state.quiz_done:
     result = determine_season(st.session_state.quiz_answers)
     st.session_state["quiz_result"] = result
 
-    emoji  = result["emoji"]
-    season = result["season"]
-    conf   = result["confidence"]
+    emoji        = result["emoji"]
+    season_label = result["season_label"]
+    conf         = result["confidence"]
 
     st.markdown(f"## {emoji} Résultat du quiz")
-    st.markdown(f"### {season}")
+    st.markdown(f"### {season_label}")
 
     conf_color = "#4CAF50" if conf >= 75 else "#FF9800" if conf >= 55 else "#F44336"
     st.markdown(
@@ -254,8 +258,8 @@ if st.session_state.quiz_done:
         unsafe_allow_html=True,
     )
 
-    if result.get("runner_up"):
-        st.info(f"Résultat proche : **{result['runner_up']}** — l'analyse photo affinera le résultat.")
+    if result.get("runner_up_label"):
+        st.info(f"Résultat proche : **{result['runner_up_label']}** — l'analyse photo affinera le résultat.")
 
     scores = result["scores"]
     col1, col2, col3 = st.columns(3)

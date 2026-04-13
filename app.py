@@ -1981,9 +1981,9 @@ def main():
     # ---- Bannière résultat quiz (si quiz fait) ----
     if quiz_result:
         emoji  = quiz_result.get("emoji", "🎨")
-        season = quiz_result.get("season", "")
+        season = quiz_result.get("season_label") or quiz_result.get("season", "")
         conf   = quiz_result.get("confidence", 0)
-        runner = quiz_result.get("runner_up")
+        runner = quiz_result.get("runner_up_label") or quiz_result.get("runner_up")
         conf_color = "#4CAF50" if conf >= 75 else "#FF9800" if conf >= 55 else "#F44336"
         runner_txt = f" · proche de {runner}" if runner else ""
         st.markdown(
