@@ -58,10 +58,13 @@ if not ctx:
         st.stop()
 
 season     = ctx["season"]
-skin_stats = ctx["skin_stats"]   # L, a, b, C
-skin_L     = skin_stats["L"]
+skin_stats = ctx["skin_stats"]   # L, a, b, C, L_foundation
+# L_foundation = 70e percentile de L* (tons moyens-clairs, hors ombres)
+# Plus représentatif que la moyenne pour le matching fond de teint.
+skin_L     = skin_stats.get("L_foundation", skin_stats["L"])
 skin_a     = skin_stats["a"]
 skin_b     = skin_stats["b"]
+_skin_L_raw = skin_stats["L"]  # conservé pour info debug
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -133,7 +136,13 @@ skin_hex_approx = "#{:02X}{:02X}{:02X}".format(
 )
 
 col1, col2, col3 = st.columns(3)
-col1.metric("Luminosité (L*)", f"{skin_L:.1f}")
+col1.metric(
+    "Clarté teint (L*)",
+    f"{skin_L:.1f}",
+    delta=f"moy. brute {_skin_L_raw:.1f}" if abs(skin_L - _skin_L_raw) > 1 else None,
+    delta_color="off",
+    help="70e percentile de L* (zones bien éclairées). La moyenne brute inclut les ombres et sous-estime la clarté réelle.",
+)
 col2.metric("Sous-ton rouge/vert (a*)", f"{skin_a:.1f}")
 col3.metric("Sous-ton chaud/froid (b*)", f"{skin_b:.1f}")
 

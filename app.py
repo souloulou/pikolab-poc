@@ -2697,6 +2697,18 @@ def main():
     )
     face_stats = compute_skin_stats_robust(face_lab)
 
+    # L* foundation : 70e percentile des pixels visage (tons moyens-clairs, sans ombres ni hautes lumières).
+    # La moyenne inclut les creux/ombres et sous-estime la clarté réelle du teint.
+    # Utilisé uniquement pour le matching fond de teint — pas pour la classification.
+    if len(face_lab) >= 20:
+        _C_face = np.sqrt(face_lab[:, 1] ** 2 + face_lab[:, 2] ** 2)
+        _clean_face = face_lab[_C_face <= np.percentile(_C_face, 75)]
+        if len(_clean_face) < 20:
+            _clean_face = face_lab
+        _skin_L_foundation = float(np.percentile(_clean_face[:, 0], 70))
+    else:
+        _skin_L_foundation = face_stats["L"]
+
     _neck_lab_raw = pixels_to_lab(neck_pixels_rgb) if len(neck_pixels_rgb) >= 30 else None
     neck_lab_pixels = apply_lab_cast_correction(
         _neck_lab_raw, _wb_a_cast, _wb_b_cast - _wb_warm_offset, _wb_strength
@@ -2715,10 +2727,11 @@ def main():
             "a": face_stats["a"] * face_w + neck_stats_raw["a"] * neck_w,
             "b": face_stats["b"] * face_w + neck_stats_raw["b"] * neck_w,
             "C": face_stats["C"] * face_w + neck_stats_raw["C"] * neck_w,
+            "L_foundation": _skin_L_foundation,
         }
     else:
         overtone_delta = 0.0
-        skin_stats = face_stats
+        skin_stats = {**face_stats, "L_foundation": _skin_L_foundation}
 
     # --- Signature des imperfections (pixels haute chroma du visage) ---
     # Les taches et rougeurs révèlent le type d'overtone → indice de sous-saison
