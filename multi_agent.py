@@ -1,7 +1,7 @@
 """
 Pipeline de validation colorimétrique hybride.
-3 sources : Quiz (25%) + CIELab algorithmique (35%) + Vision Gemini (40%).
-1 seul appel Vision (au lieu de 3) pour éviter les erreurs de quota.
+3 sources : Quiz (25%) + CIELab algorithmique (35%) + 3 agents Vision Gemini (40%).
+Le contexte quiz est injecté dans chaque prompt Vision.
 """
 
 import base64
@@ -35,10 +35,96 @@ BASE_TO_SEASONS = {
 
 SEASON_TO_BASE = {s: base for base, seasons in BASE_TO_SEASONS.items() for s in seasons}
 
-# Poids des 3 sources
-_W_QUIZ  = 0.25
-_W_ALGO  = 0.35
-_W_VISION = 0.40
+# Poids des sources
+_W_QUIZ   = 0.25
+_W_ALGO   = 0.35
+_W_VISION = 0.40   # partagé entre les 3 agents Vision
+
+# ── Construction du contexte quiz ─────────────────────────────────────────────
+
+def _quiz_context_str(quiz_result: dict | None) -> str:
+    """Retourne une ligne de contexte quiz à injecter dans les prompts Vision."""
+    if not quiz_result or not quiz_result.get("season"):
+        return ""
+    label  = quiz_result.get("season_label") or quiz_result.get("season")
+    conf   = quiz_result.get("confidence", 0)
+    scores = quiz_result.get("scores", {})
+    w_str  = f"{scores.get('warmth', 0):+.1f}" if scores else "?"
+    d_str  = f"{scores.get('depth',  0):.1f}"  if scores else "?"
+    return (
+        f"\n[CONTEXTE QUIZ — données subjectives] Saison probable : {label} "
+        f"({conf}% confiance) | chaleur {w_str}/3 | profondeur {d_str}/5. "
+        f"Confirme ou corrige si ton analyse visuelle diverge."
+    )
+
+
+# ── Définition des 3 agents Vision ───────────────────────────────────────────
+
+def _build_agents(quiz_context: str) -> list[dict]:
+    seasons_list = (
+        "Light Spring, Warm Spring, Bright Spring, True Spring, "
+        "Light Summer, Cool Summer, Soft Summer, True Summer, "
+        "Soft Autumn, Warm Autumn, Deep Autumn, True Autumn, "
+        "Deep Winter, Cool Winter, Bright Winter, True Winter"
+    )
+    json_schema = (
+        '{"sub_season": "...", "base_season": "Spring|Summer|Autumn|Winter", '
+        '"temperature": "chaud|neutre|froid", "confidence": 0.0-1.0, "reasoning": "max 80 mots"}'
+    )
+
+    return [
+        {
+            "name": "Vision — Sous-ton peau",
+            "system": (
+                "Tu es un expert en analyse colorimétrique de teint. "
+                "Tu te concentres UNIQUEMENT sur la peau du visage (joues, front, menton). "
+                "Ignore la couleur des yeux. Repère les reflets chauds (dorés, pêche, abricot, jaune) "
+                "ou froids (rosés, lilas, bleutés, grisés) dans le teint. "
+                "Un teint neutre-chaud doit être classé Autumn ou Spring. "
+                "Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks."
+            ),
+            "user": (
+                f"Analyse la peau de ce visage (joues, front, menton — ignore les yeux).{quiz_context}\n"
+                f"Classe dans une des 16 saisons : {seasons_list}.\n"
+                f"Retourne ce JSON exact : {json_schema}"
+            ),
+        },
+        {
+            "name": "Vision — Expert saisonnier",
+            "system": (
+                "Tu es un expert colorimétrie saisonnier avec 20 ans d'expérience. "
+                "Tu analyses le visage complet : peau, yeux, sourcils, cheveux visibles. "
+                "Tu maîtrises le système des 16 saisons (4 bases × 4 sous-saisons). "
+                "Tu es particulièrement précis sur la distinction chaud/froid/neutre. "
+                "Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks."
+            ),
+            "user": (
+                f"Classe cette personne dans une des 16 saisons colorimétriques.{quiz_context}\n"
+                f"Saisons : {seasons_list}.\n"
+                "Analyse : peau (reflets dorés/rosés), yeux (chauds/froids/clairs/foncés), "
+                "sourcils et cheveux visibles.\n"
+                f"Retourne ce JSON exact : {json_schema}"
+            ),
+        },
+        {
+            "name": "Vision — Détecteur chaud/froid",
+            "system": (
+                "Tu es spécialisé dans la détection du caractère chaud vs froid d'un teint. "
+                "Signaux CHAUDS : reflets dorés/pêche/abricot dans la peau, "
+                "sourcils/cheveux tirant vers le roux ou le doré, tons terre dans le regard. "
+                "Signaux FROIDS : reflets roses/lilas/grisés dans la peau, yeux bleus/gris/verts froids, "
+                "cheveux cendré ou platine. "
+                "ATTENTION : un teint 'neutre' qui penche vers le chaud = Autumn ou Spring. "
+                "Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks."
+            ),
+            "user": (
+                f"Cherche tous les signaux chauds ET froids dans ce visage.{quiz_context}\n"
+                f"Tranche et classe dans une des 16 saisons : {seasons_list}.\n"
+                f"Retourne ce JSON exact : {json_schema}"
+            ),
+        },
+    ]
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -108,7 +194,7 @@ def _parse_response(raw: str, agent_name: str) -> dict | None:
             "base_season": SEASON_TO_BASE.get(season, data.get("base_season", "")),
             "temperature": data.get("temperature", "neutre"),
             "confidence": float(data.get("confidence", 0.7)),
-            "reasoning": str(data.get("reasoning", ""))[:400],
+            "reasoning": str(data.get("reasoning", ""))[:300],
         }
     except Exception:
         for season in sorted(VALID_SEASONS):
@@ -124,78 +210,6 @@ def _parse_response(raw: str, agent_name: str) -> dict | None:
         return None
 
 
-def _build_vision_prompt(
-    algo_season: str,
-    algo_confidence: float,
-    skin_stats: dict | None,
-    quiz_result: dict | None,
-) -> tuple[str, str]:
-    """Construit le prompt Vision enrichi avec le contexte Quiz et CIELab."""
-
-    # Contexte quiz
-    quiz_ctx = ""
-    if quiz_result and quiz_result.get("season"):
-        quiz_label = quiz_result.get("season_label") or quiz_result.get("season")
-        quiz_conf  = quiz_result.get("confidence", 0)
-        quiz_scores = quiz_result.get("scores", {})
-        warmth_str = f"{quiz_scores.get('warmth', 0):+.1f}" if quiz_scores else "?"
-        depth_str  = f"{quiz_scores.get('depth', 0):.1f}"  if quiz_scores else "?"
-        quiz_ctx = (
-            f"\n\nCONTEXTE QUIZ (données subjectives de l'utilisatrice) :\n"
-            f"- Saison probable : {quiz_label} (confiance {quiz_conf}%)\n"
-            f"- Score chaleur : {warmth_str} (-3=froid, +3=chaud)\n"
-            f"- Score profondeur : {depth_str} (1=très clair, 5=très foncé)\n"
-            f"- Ce contexte est basé sur : teint déclaré, couleur des yeux, "
-            f"veines, cheveux, cernes et imperfections."
-        )
-
-    # Contexte CIELab
-    algo_ctx = (
-        f"\n\nCONTEXTE ANALYSE ALGORITHMIQUE (CIELab) :\n"
-        f"- Saison calculée : {algo_season} (confiance {round(algo_confidence*100)}%)\n"
-    )
-    if skin_stats:
-        algo_ctx += (
-            f"- L* peau : {skin_stats.get('L', '?'):.1f} "
-            f"(luminosité, 0=noir, 100=blanc)\n"
-            f"- a* peau : {skin_stats.get('a', '?'):.1f} "
-            f"(rouge/vert)\n"
-            f"- b* peau : {skin_stats.get('b', '?'):.1f} "
-            f"(chaud/froid — positif=jaune, négatif=bleu)\n"
-        )
-
-    system = (
-        "Tu es une experte en colorimétrie saisonnière avec 20 ans d'expérience. "
-        "Tu analyses le visage entier : peau, yeux, sourcils, cheveux visibles. "
-        "Tu as accès à des données contextuelles (quiz subjectif et mesures CIELab). "
-        "Ton rôle est de VALIDER ou CORRIGER ces données par ton analyse visuelle. "
-        "Sois particulièrement attentive à la distinction chaud/froid/neutre. "
-        "Signaux CHAUDS : reflets dorés, pêche, abricot, roux dans la peau ou les cheveux. "
-        "Signaux FROIDS : reflets rosés, lilas, grisés, bleutés dans la peau. "
-        "Réponds UNIQUEMENT en JSON valide, sans markdown ni backticks."
-    )
-
-    user = (
-        f"Analyse ce visage et classe-le dans l'une des 16 saisons colorimétriques :{quiz_ctx}{algo_ctx}\n"
-        "Saisons possibles : "
-        "Light Spring, Warm Spring, Bright Spring, True Spring, "
-        "Light Summer, Cool Summer, Soft Summer, True Summer, "
-        "Soft Autumn, Warm Autumn, Deep Autumn, True Autumn, "
-        "Deep Winter, Cool Winter, Bright Winter, True Winter.\n\n"
-        "Analyse : peau (reflets), yeux (couleur et intensité), "
-        "sourcils et cheveux visibles, profondeur générale du teint.\n"
-        "Si le quiz et l'algo s'accordent, confirme sauf raison visuelle forte. "
-        "Si tu corriges, explique pourquoi.\n\n"
-        "Retourne ce JSON exact :\n"
-        '{"sub_season": "...", "base_season": "Spring|Summer|Autumn|Winter", '
-        '"temperature": "chaud|neutre|froid", "confidence": 0.0-1.0, '
-        '"quiz_confirmed": true|false, "algo_confirmed": true|false, '
-        '"reasoning": "max 120 mots"}'
-    )
-
-    return system, user
-
-
 # ── Synthèse finale ───────────────────────────────────────────────────────────
 
 def _synthesize(
@@ -203,54 +217,55 @@ def _synthesize(
     algo_confidence: float,
     quiz_season: str | None,
     quiz_confidence: float,
-    vision_result: dict | None,
+    vision_results: list[dict],
 ) -> tuple[str, str, str]:
     """
-    Combine Quiz + CIELab + Vision → (saison finale, base, niveau d'accord).
-    Retourne (consensus_season, consensus_base, agreement_level).
+    Combine Quiz + CIELab + agents Vision → (saison finale, base, accord).
     """
-    # Bases de chaque source
-    algo_base  = SEASON_TO_BASE.get(algo_season, "")
-    quiz_base  = SEASON_TO_BASE.get(quiz_season, "") if quiz_season else None
-    vision_base = SEASON_TO_BASE.get(vision_result["sub_season"], "") if vision_result else None
-    vision_season = vision_result["sub_season"] if vision_result else None
-    vision_conf   = vision_result.get("confidence", 0.7) if vision_result else 0.0
+    algo_base = SEASON_TO_BASE.get(algo_season, "")
+    quiz_base = SEASON_TO_BASE.get(quiz_season, "") if quiz_season else None
 
     # Vote pondéré sur la base
     base_weights: dict[str, float] = {}
-    if algo_base:
-        base_weights[algo_base] = base_weights.get(algo_base, 0) + _W_ALGO
+    base_weights[algo_base] = base_weights.get(algo_base, 0) + _W_ALGO
     if quiz_base:
         base_weights[quiz_base] = base_weights.get(quiz_base, 0) + _W_QUIZ * (quiz_confidence / 100)
-    if vision_base:
-        base_weights[vision_base] = base_weights.get(vision_base, 0) + _W_VISION * vision_conf
+    vision_weight_each = _W_VISION / max(len(vision_results), 1)
+    for vr in vision_results:
+        vb = vr.get("base_season", "")
+        if vb:
+            base_weights[vb] = base_weights.get(vb, 0) + vision_weight_each * vr.get("confidence", 0.7)
 
     consensus_base = max(base_weights, key=base_weights.get) if base_weights else algo_base
-    total_weight = base_weights.get(consensus_base, 0)
 
-    # Niveau d'accord
-    sources_agreeing = sum([
-        algo_base  == consensus_base,
-        quiz_base  == consensus_base if quiz_base  else False,
-        vision_base == consensus_base if vision_base else False,
-    ])
-    total_sources = 1 + (1 if quiz_base else 0) + (1 if vision_base else 0)
-
-    if sources_agreeing == total_sources:
+    # Niveau d'accord (sur toutes les sources)
+    all_bases = (
+        [algo_base]
+        + ([quiz_base] if quiz_base else [])
+        + [vr.get("base_season", "") for vr in vision_results]
+    )
+    agreeing     = sum(1 for b in all_bases if b == consensus_base)
+    total_sources = len(all_bases)
+    if agreeing == total_sources:
         agreement = "unanimite"
-    elif sources_agreeing >= max(2, (total_sources + 1) // 2):
+    elif agreeing >= max(2, (total_sources + 1) // 2):
         agreement = "majorite"
     else:
         agreement = "desaccord"
 
-    # Sous-saison finale (priorité Vision si dispo, sinon algo)
-    if vision_season and vision_base == consensus_base:
-        consensus_season = vision_season
-    elif quiz_season and quiz_base == consensus_base:
-        consensus_season = algo_season  # garde l'algo pour la précision numerique
-    else:
-        consensus_season = algo_season
+    # Sous-saison : vote pondéré parmi les sources qui s'accordent sur la base
+    sub_votes: dict[str, float] = {}
+    if algo_base == consensus_base:
+        sub_votes[algo_season] = sub_votes.get(algo_season, 0) + _W_ALGO
+    if quiz_season and quiz_base == consensus_base:
+        sub_votes[quiz_season] = sub_votes.get(quiz_season, 0) + _W_QUIZ * (quiz_confidence / 100)
+    for vr in vision_results:
+        if vr.get("base_season") == consensus_base:
+            s = vr.get("sub_season", "")
+            if s in VALID_SEASONS:
+                sub_votes[s] = sub_votes.get(s, 0) + vision_weight_each * vr.get("confidence", 0.7)
 
+    consensus_season = max(sub_votes, key=sub_votes.get) if sub_votes else algo_season
     if consensus_season not in VALID_SEASONS:
         consensus_season = algo_season
 
@@ -268,24 +283,14 @@ def run_consensus_analysis(
     quiz_result: dict | None = None,
 ) -> dict:
     """
-    Validation hybride : Quiz + CIELab + 1 agent Vision Gemini.
-
-    Retour :
-    {
-        "consensus_season": str,
-        "consensus_base": str,
-        "agents": list[dict],
-        "base_votes": dict[str, float],
-        "agreement_level": str,
-        "overridden": bool,
-        "errors": list[str],
-        "quiz_used": bool,
-    }
+    Validation hybride : Quiz + CIELab + 3 agents Vision Gemini.
+    Le contexte quiz est injecté dans chaque prompt Vision.
     """
-    image_b64  = _image_to_b64(image_rgb)
-    algo_base  = SEASON_TO_BASE.get(algo_season, "")
+    image_b64   = _image_to_b64(image_rgb)
+    algo_base   = SEASON_TO_BASE.get(algo_season, "")
     quiz_season = quiz_result.get("season") if quiz_result else None
     quiz_conf   = quiz_result.get("confidence", 0) if quiz_result else 0
+    quiz_ctx    = _quiz_context_str(quiz_result)
 
     # Source 1 : CIELab algorithmique
     agents_results = [{
@@ -305,33 +310,32 @@ def run_consensus_analysis(
             "base_season": SEASON_TO_BASE.get(quiz_season, ""),
             "temperature": "chaud" if SEASON_TO_BASE.get(quiz_season, "") in ("Spring", "Autumn") else "froid",
             "confidence": quiz_conf / 100,
-            "reasoning": f"Questionnaire subjectif : teint, yeux, veines, cheveux, cernes (confiance {quiz_conf}%)",
+            "reasoning": f"Questionnaire : teint, yeux, veines, cheveux, cernes ({quiz_conf}% confiance)",
         })
 
-    # Source 3 : Vision Gemini (1 agent enrichi)
+    # Source 3 : 3 agents Vision Gemini avec contexte quiz injecté
     errors = []
-    vision_result = None
-    system_prompt, user_prompt = _build_vision_prompt(
-        algo_season, algo_confidence, skin_stats, quiz_result
-    )
-    try:
-        raw = _call_gemini_vision(api_key, system_prompt, user_prompt, image_b64)
-        vision_result = _parse_response(raw, "Vision Gemini")
-        if vision_result:
-            agents_results.append(vision_result)
-        else:
-            errors.append(f"Vision : réponse non parsable ({raw[:80]}...)")
-    except Exception as exc:
-        errors.append(f"Vision : {str(exc)[:120]}")
+    vision_results = []
+    for cfg in _build_agents(quiz_ctx):
+        try:
+            raw    = _call_gemini_vision(api_key, cfg["system"], cfg["user"], image_b64)
+            parsed = _parse_response(raw, cfg["name"])
+            if parsed:
+                agents_results.append(parsed)
+                vision_results.append(parsed)
+            else:
+                errors.append(f"{cfg['name']} : réponse non parsable ({raw[:60]}...)")
+        except Exception as exc:
+            errors.append(f"{cfg['name']} : {str(exc)[:100]}")
 
     # Synthèse
     consensus_season, consensus_base, agreement = _synthesize(
         algo_season, algo_confidence,
         quiz_season, quiz_conf,
-        vision_result,
+        vision_results,
     )
 
-    # Votes (pour affichage)
+    # Votes bruts pour affichage
     base_votes: dict[str, int] = {}
     for r in agents_results:
         b = r.get("base_season", "")
@@ -339,12 +343,12 @@ def run_consensus_analysis(
             base_votes[b] = base_votes.get(b, 0) + 1
 
     return {
-        "consensus_season":  consensus_season,
-        "consensus_base":    consensus_base,
-        "agents":            agents_results,
-        "base_votes":        base_votes,
-        "agreement_level":   agreement,
-        "overridden":        consensus_season != algo_season,
-        "errors":            errors,
-        "quiz_used":         quiz_season is not None,
+        "consensus_season": consensus_season,
+        "consensus_base":   consensus_base,
+        "agents":           agents_results,
+        "base_votes":       base_votes,
+        "agreement_level":  agreement,
+        "overridden":       consensus_season != algo_season,
+        "errors":           errors,
+        "quiz_used":        quiz_season is not None,
     }
