@@ -128,49 +128,67 @@ def delta_e_label(de: float) -> tuple[str, str]:
     return "🔴", f"Teinte eloignee (ΔE {de:.1f})"
 
 
-def extract_jaw_L(image_rgb: np.ndarray) -> float | None:
+def extract_jaw_neck_L(image_rgb: np.ndarray) -> float | None:
     """
     Extrait le L* de référence fond de teint depuis une photo de profil/45°.
 
+    Cible deux zones complémentaires :
+    - Mâchoire (bord inférieur du visage) : souvent maquillée, mais référence de forme
+    - Cou sous le menton : jamais maquillé → référence vraie même avec fond de teint
+
+    Sur un profil/45°, le cou n'est plus dans l'ombre de la mâchoire → les deux
+    zones sont également exploitables.
+
     Stratégie :
-    1. Essaie MediaPipe pour cibler la zone mâchoire si la tête est suffisamment de face.
-    2. Fallback : filtrage Lab par plage peau sur la région centrale de l'image.
-    Dans les deux cas, retourne le 70e percentile de L* des pixels peau trouvés.
+    1. MediaPipe → masque mâchoire (tiers bas du visage) + cou (jusqu'à 40 % en dessous).
+    2. Fallback : filtrage Lab par plage peau sur la moitié basse de l'image.
+    Retourne le 70e percentile de L* des pixels peau combinés.
     """
-    # Essai MediaPipe
     try:
         sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
         from app import detect_face, JAWLINE_IDX, pixels_to_lab
         landmarks = detect_face(image_rgb)
         if landmarks and len(landmarks) > max(JAWLINE_IDX):
-            # Construire un masque sur la zone basse de la mâchoire (tiers inférieur du visage)
             h, w = image_rgb.shape[:2]
-            jaw_pts = [landmarks[i] for i in JAWLINE_IDX]
-            chin_y  = max(p[1] for p in jaw_pts)
+            jaw_pts  = [landmarks[i] for i in JAWLINE_IDX]
+            chin_y   = max(p[1] for p in jaw_pts)
             face_top = min(p[1] for p in jaw_pts)
             face_h   = max(1, chin_y - face_top)
-            # Bande : du tiers inférieur jusqu'au menton
-            band_top = int(chin_y - face_h * 0.35)
-            band_bot = chin_y
-            left_x   = min(p[0] for p in jaw_pts) + int(w * 0.05)
-            right_x  = max(p[0] for p in jaw_pts) - int(w * 0.05)
+            left_x   = min(p[0] for p in jaw_pts) + int(w * 0.04)
+            right_x  = max(p[0] for p in jaw_pts) - int(w * 0.04)
+
+            # Zone 1 : mâchoire — tiers inférieur du visage jusqu'au menton
+            jaw_top = int(chin_y - face_h * 0.35)
+            # Zone 2 : cou — jusqu'à 40 % de la hauteur du visage sous le menton
+            neck_bot = min(h - 5, int(chin_y + face_h * 0.40))
+
             mask = np.zeros((h, w), dtype=np.uint8)
-            cv2.rectangle(mask, (left_x, band_top), (right_x, band_bot), 255, -1)
-            jaw_pixels = image_rgb[mask > 0].reshape(-1, 3)
-            if len(jaw_pixels) >= 50:
-                lab = pixels_to_lab(jaw_pixels)
+            # Mâchoire
+            cv2.rectangle(mask, (left_x, jaw_top), (right_x, chin_y), 255, -1)
+            # Cou (légèrement rétréci sur les côtés pour éviter les cheveux/vêtements)
+            neck_inset = int((right_x - left_x) * 0.08)
+            cv2.rectangle(
+                mask,
+                (left_x + neck_inset, chin_y),
+                (right_x - neck_inset, neck_bot),
+                255, -1,
+            )
+
+            combined_pixels = image_rgb[mask > 0].reshape(-1, 3)
+            if len(combined_pixels) >= 80:
+                lab = pixels_to_lab(combined_pixels)
                 C = np.sqrt(lab[:, 1] ** 2 + lab[:, 2] ** 2)
                 clean = lab[C <= np.percentile(C, 75)]
-                if len(clean) >= 20:
+                if len(clean) >= 30:
                     return float(np.percentile(clean[:, 0], 70))
     except Exception:
         pass  # MediaPipe indisponible ou profil trop marqué → fallback
 
-    # Fallback : filtrage Lab sur région centrale (évite le fond)
+    # Fallback : filtrage Lab par plage peau sur la moitié basse de l'image
+    # (mâchoire + cou sont dans la moitié inférieure sur un selfie/portrait)
     h, w = image_rgb.shape[:2]
-    region = image_rgb[int(h * 0.15):int(h * 0.85), int(w * 0.15):int(w * 0.85)]
+    region = image_rgb[int(h * 0.40):int(h * 0.90), int(w * 0.10):int(w * 0.90)]
     lab_all = rgb2lab(region.astype(np.float64) / 255.0).reshape(-1, 3)
-    # Plage peau : L* 28–92, a* 4–22, b* 4–32
     skin_mask = (
         (lab_all[:, 0] >= 28) & (lab_all[:, 0] <= 92) &
         (lab_all[:, 1] >= 4)  & (lab_all[:, 1] <= 22) &
@@ -211,9 +229,9 @@ def _jaw_photo_section() -> float | None:
             pil_img = Image.open(io.BytesIO(jaw_img_file.read())).convert("RGB")
             img_rgb = np.array(pil_img)
             with st.spinner("Analyse de la mâchoire..."):
-                jaw_L = extract_jaw_L(img_rgb)
+                jaw_L = extract_jaw_neck_L(img_rgb)
             if jaw_L is not None:
-                st.success(f"Clarté mâchoire mesurée : **L* {jaw_L:.1f}** (utilisée pour le matching)")
+                st.success(f"Clarté mâchoire + cou mesurée : **L* {jaw_L:.1f}** (utilisée pour le matching)")
                 # Aperçu miniature
                 st.image(pil_img, width=220, caption="Photo analysée")
                 return jaw_L
@@ -233,7 +251,7 @@ st.caption(f"Profil actif : **{season}**")
 _jaw_L = _jaw_photo_section()
 if _jaw_L is not None:
     skin_L = _jaw_L
-    _source_label = f"mâchoire (photo) L* {skin_L:.1f}"
+    _source_label = f"mâchoire + cou (photo) L* {skin_L:.1f}"
 else:
     _source_label = f"visage frontal L* {skin_L:.1f}"
 
