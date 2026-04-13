@@ -2762,10 +2762,12 @@ def main():
     # ---- Consensus multi-agents ----
     consensus_data = None
     if gemini_api_key:
-        with st.spinner("Validation multi-agents en cours (3 agents IA)..."):
+        with st.spinner("Validation Vision + Quiz en cours..."):
             try:
                 consensus_data = run_consensus_analysis(
-                    corrected, season, confidence, gemini_api_key
+                    corrected, season, confidence, gemini_api_key,
+                    skin_stats=skin_stats,
+                    quiz_result=st.session_state.get("quiz_result"),
                 )
                 # Override si le consensus est majoritaire/unanime ET vote une base différente.
                 # On ré-exécute classify_season dans la base majoritaire pour garder
