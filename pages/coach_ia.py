@@ -32,8 +32,9 @@ st.markdown(
 )
 st.sidebar.header("PikoLab")
 st.sidebar.page_link("app.py", label="Analyse", icon="🎨")
-st.sidebar.page_link("pages/scanner.py", label="Scanner", icon="📷")
-st.sidebar.page_link("pages/coach_ia.py", label="Coach Iris", icon="💬")
+st.sidebar.page_link("pages/scanner.py",       label="Scanner",       icon="📷")
+st.sidebar.page_link("pages/fond_de_teint.py", label="Fond de teint", icon="💄")
+st.sidebar.page_link("pages/coach_ia.py",      label="Coach Iris",    icon="💬")
 
 # ---- Check prerequisites ----
 ai_key = os.environ.get("GEMINI_API_KEY", "")
