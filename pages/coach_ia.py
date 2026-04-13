@@ -4,6 +4,7 @@ Chat conversationnel avec Iris, coach styliste virtuelle.
 Lit le contexte d'analyse depuis st.session_state.
 """
 
+import json
 import os
 import streamlit as st
 from google import genai
@@ -50,10 +51,22 @@ if not ai_key:
 
 ctx = st.session_state.get("ctx")
 if not ctx:
-    st.info("Analysez d'abord une photo sur la page principale pour activer le coach.")
-    if st.button("Aller a l'analyse", type="primary", use_container_width=True):
-        st.switch_page("app.py")
-    st.stop()
+    _save_path = Path(__file__).resolve().parent.parent / "dev_session.json"
+    if _save_path.exists():
+        try:
+            _saved = json.loads(_save_path.read_text(encoding="utf-8"))
+            from season_advice import SEASON_ADVICE as _SA
+            _saved["advice"] = _SA.get(_saved.get("season"), {})
+            st.session_state["ctx"] = _saved
+            ctx = _saved
+            st.toast(f"Session restaurée — {ctx.get('season', '?')}", icon="✅")
+        except Exception as e:
+            st.warning(f"Impossible de charger la session sauvegardée : {e}")
+    if not ctx:
+        st.info("Analysez d'abord une photo sur la page principale pour activer le coach.")
+        if st.button("Aller a l'analyse", type="primary", use_container_width=True):
+            st.switch_page("app.py")
+        st.stop()
 
 # ---- Header ----
 season = ctx["season"]

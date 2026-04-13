@@ -4,9 +4,11 @@ Determine la palette saisonniere (16 saisons) a partir d'une photo de visage.
 Pipeline : MediaPipe Face Mesh -> masquage peau/iris -> correction couleur -> CIELab -> classification
 """
 
+import json
 import os
 import urllib.request
 from datetime import datetime
+from pathlib import Path
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -2792,14 +2794,23 @@ def main():
                     skin_stats=skin_stats,
                     quiz_result=st.session_state.get("quiz_result"),
                 )
-                # Override si le consensus est majoritaire/unanime ET vote une base différente.
-                # On ré-exécute classify_season dans la base majoritaire pour garder
-                # les scores pixel intacts → les jauges restent cohérentes avec la saison.
-                _c_base  = consensus_data.get("consensus_base", "")
-                _c_agree = consensus_data.get("agreement_level", "desaccord")
+                # Override si le consensus est majoritaire/unanime.
+                # Cas 1 : base différente → reclassifier dans la base majoritaire
+                #         (les scores pixel restent intacts, jauges cohérentes).
+                # Cas 2 : même base mais sous-saison différente → appliquer directement
+                #         la sous-saison du consensus.
+                _c_season = consensus_data.get("consensus_season", "")
+                _c_base   = consensus_data.get("consensus_base", "")
+                _c_agree  = consensus_data.get("agreement_level", "desaccord")
                 _algo_base = season.split()[-1] if season else ""
-                if _c_base and _c_base != _algo_base and _c_agree in ("majorite", "unanimite"):
-                    season = classify_season_in_base(scores, _c_base)
+                _new_season = None
+                if _c_agree in ("majorite", "unanimite"):
+                    if _c_base and _c_base != _algo_base:
+                        _new_season = classify_season_in_base(scores, _c_base)
+                    elif _c_season and _c_season != season and _c_season in SEASON_ADVICE:
+                        _new_season = _c_season
+                if _new_season:
+                    season = _new_season
                     advice = SEASON_ADVICE.get(season, {})
                     profile = compute_professional_profile(scores, contrast, skin_temp=skin_temp_norm)
                     diagnostic = generate_personal_diagnostic(
@@ -2839,6 +2850,17 @@ def main():
         "skin_stats": {k: round(float(v), 2) for k, v in skin_stats.items()},
         "iris_stats": {k: round(float(v), 2) for k, v in iris_stats.items() if k != "rgb"} if iris_stats else None,
     }
+
+    # ---- Sauvegarde session dev (permet de reprendre sans refaire l'analyse) ----
+    try:
+        _save_path = Path(__file__).parent / "dev_session.json"
+        _ctx_serializable = {
+            k: v for k, v in st.session_state["ctx"].items()
+            if k != "advice"  # SEASON_ADVICE est rechargé dynamiquement
+        }
+        _save_path.write_text(json.dumps(_ctx_serializable, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass  # jamais bloquant
 
     # ---- Season result card ----
     season_colors = SEASON_PALETTES.get(season, ["#E07A5F", "#F2CC8F"])

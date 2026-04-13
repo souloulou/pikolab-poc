@@ -4,6 +4,7 @@ Trouve le fond de teint le plus adapte a ton teint reel,
 et decouvre les blush et rouges a levres les mieux accordes.
 """
 
+import json
 import sys
 from pathlib import Path
 import numpy as np
@@ -35,13 +36,26 @@ st.sidebar.page_link("pages/scanner.py",          label="Scanner",       icon="�
 st.sidebar.page_link("pages/fond_de_teint.py",    label="Fond de teint", icon="💄")
 st.sidebar.page_link("pages/coach_ia.py",         label="Coach Iris",    icon="💬")
 
-# ── Guard : analyse requise ────────────────────────────────────────────────────
+# ── Guard : analyse requise (ou session sauvegardée) ──────────────────────────
 ctx = st.session_state.get("ctx")
 if not ctx:
-    st.info("Analysez d'abord une photo de votre visage pour activer cette page.")
-    if st.button("Aller a l'analyse", type="primary", use_container_width=True):
-        st.switch_page("app.py")
-    st.stop()
+    _save_path = Path(__file__).resolve().parent.parent / "dev_session.json"
+    if _save_path.exists():
+        try:
+            _saved = json.loads(_save_path.read_text(encoding="utf-8"))
+            # Réinjecter advice depuis SEASON_ADVICE (non sauvegardé pour alléger le fichier)
+            from season_advice import SEASON_ADVICE as _SA
+            _saved["advice"] = _SA.get(_saved.get("season"), {})
+            st.session_state["ctx"] = _saved
+            ctx = _saved
+            st.toast(f"Session restaurée — {ctx.get('season', '?')}", icon="✅")
+        except Exception as e:
+            st.warning(f"Impossible de charger la session sauvegardée : {e}")
+    if not ctx:
+        st.info("Analysez d'abord une photo de votre visage pour activer cette page.")
+        if st.button("Aller a l'analyse", type="primary", use_container_width=True):
+            st.switch_page("app.py")
+        st.stop()
 
 season     = ctx["season"]
 skin_stats = ctx["skin_stats"]   # L, a, b, C
