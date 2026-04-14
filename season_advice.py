@@ -23,7 +23,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F5F0E1", "#D2B48C", "#C4A882", "#8B7D6B", "#5C5248"],
         "palette_accents": ["#FFB347", "#FF6F61", "#87CEAB", "#FFD700", "#F4A460", "#77B5FE"],
         "palette_avoid": ["#000000", "#1C1C1C", "#800020", "#4B0082", "#2F4F4F", "#C0C0C0"],
-        "metals": "Or jaune clair, or rose. Eviter argent et platine.",
+        "metals": "Or jaune 9 carats, or rose 9 carats.",
         "makeup": {
             "foundation": "Sous-ton peche/dore clair. Finish lumineux ou satin. Eviter les fonds de teint roses.",
             "lips": ["Peche clair", "Corail doux", "Rose saumon", "Nude abricot"],
@@ -98,7 +98,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#FFFDD0", "#D2B48C", "#8B7355", "#5C4033", "#3B2F2F"],
         "palette_accents": ["#E07A5F", "#E9C46A", "#81B29A", "#F4A261", "#FF6B35", "#2A9D8F"],
         "palette_avoid": ["#000000", "#FF00FF", "#C0C0C0", "#4169E1", "#800080", "#F8F8FF"],
-        "metals": "Or jaune, cuivre, laiton. Eviter argent froid.",
+        "metals": "Or jaune 14 carats, or rose 14 carats, cuivre.",
         "makeup": {
             "foundation": "Sous-ton dore franc. Les teintes peche/abricot sont ideales.",
             "lips": ["Corail chaud", "Orange brulee doux", "Peche intense", "Brique claire"],
@@ -173,7 +173,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#FFFAFA", "#F5DEB3", "#8B7355", "#4A4A4A", "#1C1C1C"],
         "palette_accents": ["#FF6B35", "#06D6A0", "#EF476F", "#118AB2", "#FFD166", "#F77F00"],
         "palette_avoid": ["#8B8C7A", "#B5838D", "#C2B280", "#A39BA8", "#6D6875", "#5F7A61"],
-        "metals": "Or jaune brillant, or rose. L'argent est possible si brillant.",
+        "metals": "Or jaune 18 carats, or rose 18 carats.",
         "makeup": {
             "foundation": "Sous-ton peche/dore lumineux. Finish satin ou lumineux.",
             "lips": ["Corail vif", "Rose chaud vif", "Rouge tomate", "Fuchsia chaud"],
@@ -248,7 +248,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#FFFFF0", "#D2B48C", "#8B7355", "#556B2F", "#3B3B3B"],
         "palette_accents": ["#FF5733", "#FFC300", "#28B463", "#FF69B4", "#00B4D8", "#FF8C00"],
         "palette_avoid": ["#1C1C1C", "#800020", "#4B0082", "#2F4F4F", "#808080", "#C0C0C0"],
-        "metals": "Or jaune, or rose, laiton poli.",
+        "metals": "Or jaune 14 carats, or rose 14 carats.",
         "makeup": {
             "foundation": "Sous-ton dore equilibre. Ni trop rose, ni trop jaune.",
             "lips": ["Corail pur", "Rouge tomate", "Rose peche", "Nude dore"],
@@ -325,7 +325,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F0F0F0", "#C0C0C0", "#A9A9B0", "#6B6B7B", "#4A4A5A"],
         "palette_accents": ["#CDB4DB", "#BDE0FE", "#FFAFCC", "#A2D2FF", "#D0D1FF", "#98D8C8"],
         "palette_avoid": ["#FF4500", "#FF8C00", "#8B4513", "#DAA520", "#556B2F", "#000000"],
-        "metals": "Argent, or blanc, platine, or rose clair.",
+        "metals": "Argent 925 rhodi\u00e9, or blanc 9 carats.",
         "makeup": {
             "foundation": "Sous-ton rose clair/neutre froid. Finish naturel.",
             "lips": ["Rose poudre", "Mauve clair", "Rose nude froid", "Framboise douce"],
@@ -400,7 +400,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F0EFF4", "#9A8C98", "#6D6875", "#4A4E69", "#2B2D42"],
         "palette_accents": ["#7B9EA8", "#C9ADA7", "#84A98C", "#B5838D", "#9CADB7", "#8B687D"],
         "palette_avoid": ["#FF8C00", "#FFD700", "#FF4500", "#DAA520", "#8B4513", "#556B2F"],
-        "metals": "Argent, platine, or blanc.",
+        "metals": "Platine, argent 925 rhodi\u00e9.",
         "makeup": {
             "foundation": "Sous-ton rose/neutre froid. Eviter le dore.",
             "lips": ["Rose mauve", "Framboise", "Prune douce", "Rose-brun froid"],
@@ -475,7 +475,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#EDEBE8", "#C9CBA3", "#A39BA8", "#8D99AE", "#5A5A6E"],
         "palette_accents": ["#B5838D", "#95B8D1", "#CEB5A7", "#A8A4CE", "#B8B8D1", "#8DAA9D"],
         "palette_avoid": ["#FF0000", "#FF8C00", "#00FF00", "#FFD700", "#FF1493", "#000000"],
-        "metals": "Argent mat, or rose, or blanc. Eviter les metaux brillants.",
+        "metals": "Argent 925 brosse mat, or blanc 9 carats mat.",
         "makeup": {
             "foundation": "Sous-ton neutre a froid. Couvrance legere, finish mat doux.",
             "lips": ["Rose poudre", "Mauve", "Nude rose froid", "Baie douce"],
@@ -550,7 +550,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F0F0F0", "#B0B0BC", "#6B6B7B", "#4A4E69", "#1D3557"],
         "palette_accents": ["#DB7093", "#2A6F97", "#66CDAA", "#7678ED", "#C77DFF", "#BA68C8"],
         "palette_avoid": ["#FF4500", "#DAA520", "#8B4513", "#FF8C00", "#556B2F", "#000000"],
-        "metals": "Argent, or blanc, platine, or rose.",
+        "metals": "Argent 925, or blanc 14 carats.",
         "makeup": {
             "foundation": "Sous-ton rose equilibre. Ni trop chaud, ni trop froid.",
             "lips": ["Rose vrai", "Framboise", "Mauve rose", "Rose the"],
@@ -628,7 +628,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#EDE8D5", "#C2B280", "#8B8C7A", "#5F5B50", "#3E3D36"],
         "palette_accents": ["#A0937D", "#8DAA9D", "#C9ADA7", "#7F6B5D", "#5F7A61", "#9B8E7E"],
         "palette_avoid": ["#FF0000", "#FF00FF", "#00BFFF", "#FFD700", "#000000", "#F8F8FF"],
-        "metals": "Or jaune mat, laiton vieilli, or rose. Eviter argent brillant.",
+        "metals": "Or 9 carats brosse, or rose 14 carats, bronze, laiton.",
         "makeup": {
             "foundation": "Sous-ton peche/neutre chaud. Couvrance legere, finish mat naturel.",
             "lips": ["Nude peche", "Rose terre", "Brique douce", "Caramel"],
@@ -703,7 +703,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F5E6CA", "#8B7355", "#5C4033", "#2E3B2E", "#2D1B0E"],
         "palette_accents": ["#BC6C25", "#DDA15E", "#606C38", "#E76F51", "#CC5803", "#D4A017"],
         "palette_avoid": ["#FF69B4", "#00BFFF", "#C0C0C0", "#F0F0F0", "#FF00FF", "#4169E1"],
-        "metals": "Or jaune, bronze, cuivre. Eviter argent froid.",
+        "metals": "Or jaune 14 carats, bronze dore, cuivre.",
         "makeup": {
             "foundation": "Sous-ton dore/peche. Eviter les fonds de teint roses.",
             "lips": ["Terracotta", "Brique", "Rouille", "Nude chaud fonce"],
@@ -778,7 +778,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#E8DCC8", "#7F6B5D", "#4A3728", "#2E3B2E", "#1A1A1A"],
         "palette_accents": ["#6B2737", "#8B4513", "#1B5E20", "#8B6914", "#722F37", "#4A5240"],
         "palette_avoid": ["#FFAFCC", "#BDE0FE", "#FFD700", "#98FB98", "#F0F0F0", "#C0C0C0"],
-        "metals": "Or jaune profond, bronze antique, cuivre fonce.",
+        "metals": "Or rouge 18 carats, or jaune 18 carats, bronze profond, cuivre.",
         "makeup": {
             "foundation": "Sous-ton dore profond/olive. Couvrance moyenne a forte.",
             "lips": ["Bordeaux chaud", "Brun rouge", "Prune chaude", "Chocolat"],
@@ -853,7 +853,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F0E6D2", "#8B7D6B", "#5C4033", "#3B3B2E", "#2D1B0E"],
         "palette_accents": ["#D35400", "#6B8E23", "#B7410E", "#795548", "#B8860B", "#008080"],
         "palette_avoid": ["#FF69B4", "#4169E1", "#C0C0C0", "#F8F8FF", "#800080", "#00BFFF"],
-        "metals": "Or jaune, bronze, cuivre, laiton.",
+        "metals": "Or jaune 18 carats, or rouge 18 carats, bronze profond, cuivre.",
         "makeup": {
             "foundation": "Sous-ton dore equilibre. Peche et abricot sont vos bases.",
             "lips": ["Rouille", "Brique", "Orange brulee", "Nude terreux"],
@@ -931,7 +931,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#FFFFFF", "#C0C0C0", "#36454F", "#1C1C1C", "#000000"],
         "palette_accents": ["#CC0000", "#1A5276", "#0B6623", "#FF1493", "#6A0DAD", "#B22222"],
         "palette_avoid": ["#DDA15E", "#C2B280", "#F4A261", "#8B8C7A", "#D2B48C", "#FADADD"],
-        "metals": "Argent, platine, or blanc. Noir et chrome.",
+        "metals": "Platine, gunmetal, argent oxyde, or blanc 18 carats.",
         "makeup": {
             "foundation": "Sous-ton neutre a froid, profond. Couvrance moyenne a forte.",
             "lips": ["Rouge profond", "Bordeaux froid", "Prune intense", "Baie foncee"],
@@ -1006,7 +1006,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F8F8FF", "#B0B0BC", "#36454F", "#2B2D42", "#0D0D0D"],
         "palette_accents": ["#DC143C", "#4B0082", "#C71585", "#01796F", "#B0E0E6", "#191970"],
         "palette_avoid": ["#FF8C00", "#DAA520", "#8B4513", "#DDA15E", "#556B2F", "#F4A261"],
-        "metals": "Argent, platine, or blanc. Chrome.",
+        "metals": "Platine, argent 925 rhodi\u00e9.",
         "makeup": {
             "foundation": "Sous-ton rose franc. Froid et net.",
             "lips": ["Rouge cerise", "Fuchsia", "Rose vif froid", "Prune froide"],
@@ -1081,7 +1081,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F8F8FF", "#B0B0B0", "#4A4A4A", "#1C1C1C", "#000000"],
         "palette_accents": ["#0066FF", "#FF1493", "#FFF700", "#8B00FF", "#FF0000", "#00CC44"],
         "palette_avoid": ["#C2B280", "#8B8C7A", "#A39BA8", "#CEB5A7", "#7F6B5D", "#B5838D"],
-        "metals": "Argent brillant, or blanc, chrome, platine.",
+        "metals": "Argent 925 rhodi\u00e9 brillant, or blanc 18 carats.",
         "makeup": {
             "foundation": "Sous-ton neutre a froid. Finish lumineux ou satin.",
             "lips": ["Fuchsia vif", "Rouge pur", "Rose electrique", "Baie vive"],
@@ -1156,7 +1156,7 @@ SEASON_ADVICE = {
         "palette_neutrals": ["#F5F5F5", "#C0C0C0", "#36454F", "#1C1C1C", "#000000"],
         "palette_accents": ["#CC0000", "#0000CD", "#00563F", "#FF69B4", "#301934", "#4169E1"],
         "palette_avoid": ["#DDA15E", "#C2B280", "#F4A261", "#8B8C7A", "#D2B48C", "#FFE5B4"],
-        "metals": "Argent, platine, or blanc.",
+        "metals": "Argent 925, or blanc 18 carats, platine.",
         "makeup": {
             "foundation": "Sous-ton neutre froid equilibre. Net et impeccable.",
             "lips": ["Rouge classique", "Rose vif froid", "Prune", "Berry"],
