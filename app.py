@@ -2898,17 +2898,16 @@ def main():
                 # Cas 2 : même base mais sous-saison différente → appliquer directement
                 #         la sous-saison du consensus.
                 _c_season = consensus_data.get("consensus_season", "")
-                _c_base   = consensus_data.get("consensus_base", "")
                 _c_agree  = consensus_data.get("agreement_level", "desaccord")
-                _algo_base = season.split()[-1] if season else ""
-                _new_season = None
-                if _c_agree in ("majorite", "unanimite"):
-                    if _c_base and _c_base != _algo_base:
-                        _new_season = classify_season_in_base(scores, _c_base)
-                    elif _c_season and _c_season != season and _c_season in SEASON_ADVICE:
-                        _new_season = _c_season
-                if _new_season:
-                    season = _new_season
+                # Override direct : si majorité/unanimité et saison valide → on l'applique,
+                # sans passer par classify_season_in_base qui pouvait renvoyer l'algo.
+                if (
+                    _c_agree in ("majorite", "unanimite")
+                    and _c_season
+                    and _c_season in SEASON_ADVICE
+                    and _c_season != season
+                ):
+                    season = _c_season
                     advice = SEASON_ADVICE.get(season, {})
                     profile = compute_professional_profile(scores, contrast, skin_temp=skin_temp_norm)
                     diagnostic = generate_personal_diagnostic(

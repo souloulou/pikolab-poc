@@ -307,25 +307,41 @@ scored = sorted(
     key=lambda x: x["delta_e"],
 )
 
-# ── Recommandation unique ──────────────────────────────────────────────────────
-best = scored[0]
-emoji_b, label_b = delta_e_label(best["delta_e"])
-undertone_fr_b = {"warm": "Chaud", "cool": "Froid", "neutral": "Neutre"}.get(
-    best["undertone"], best["undertone"]
-)
-st.markdown(f"**Recommandation — {selected_brand} {selected_product}**")
-st.markdown(
-    f"<div style='display:flex;align-items:center;gap:16px;padding:16px;"
-    f"background:#1e1e1e;border-radius:10px;border:1px solid #33333380'>"
-    f"<div style='width:56px;height:56px;background:{best['hex']};"
-    f"border-radius:10px;border:1px solid #55555540;flex-shrink:0'></div>"
-    f"<div>"
-    f"<div style='font-size:1.1rem;font-weight:700'>{best['ref']} — {best['name']}</div>"
-    f"<div style='margin-top:4px'>{emoji_b} {label_b}</div>"
-    f"<div style='color:#aaa;font-size:0.85rem;margin-top:2px'>Sous-ton : {undertone_fr_b}</div>"
-    f"</div></div>",
-    unsafe_allow_html=True,
-)
+# ── Recommandations (1 ou 2 selon cohérence) ──────────────────────────────────
+st.markdown(f"**Recommandations — {selected_brand} {selected_product}**")
+
+_undertone_fr = {"warm": "Chaud", "cool": "Froid", "neutral": "Neutre"}
+_rank_labels   = {1: "Meilleure correspondance", 2: "Alternative proche"}
+_bg_colors     = {1: "#1a2a1a", 2: "#1e1e1e"}
+_border_colors = {1: "#5a8a5a50", 2: "#33333380"}
+
+# La 2ème option n'est affichée que si elle reste dans un ΔE acceptable (≤ 10)
+# et proche de la 1ère (écart ≤ 3) — sinon elle serait visible sur la peau.
+_to_show = [scored[0]]
+if (
+    len(scored) >= 2
+    and scored[1]["delta_e"] <= 10
+    and scored[1]["delta_e"] - scored[0]["delta_e"] <= 3
+):
+    _to_show.append(scored[1])
+
+for rank, candidate in enumerate(_to_show, start=1):
+    emoji_c, label_c = delta_e_label(candidate["delta_e"])
+    undertone_fr_c = _undertone_fr.get(candidate["undertone"], candidate["undertone"])
+    st.markdown(
+        f"<div style='display:flex;align-items:center;gap:16px;padding:14px;"
+        f"background:{_bg_colors[rank]};border-radius:10px;"
+        f"border:1px solid {_border_colors[rank]};margin-bottom:10px'>"
+        f"<div style='width:52px;height:52px;background:{candidate['hex']};"
+        f"border-radius:10px;border:1px solid #55555540;flex-shrink:0'></div>"
+        f"<div style='flex:1'>"
+        f"<div style='font-size:0.75rem;color:#888;margin-bottom:2px'>{_rank_labels[rank]}</div>"
+        f"<div style='font-size:1.05rem;font-weight:700'>{candidate['ref']} — {candidate['name']}</div>"
+        f"<div style='margin-top:3px'>{emoji_c} {label_c}</div>"
+        f"<div style='color:#aaa;font-size:0.85rem;margin-top:2px'>Sous-ton : {undertone_fr_c}</div>"
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
 
 # Teintes exclues (mauvais sous-ton) dans un expander discret
 excluded = [s for s in shades if s.get("undertone", "neutral") not in _allowed_undertones]

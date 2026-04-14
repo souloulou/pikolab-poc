@@ -104,6 +104,8 @@ QUESTIONS = [
         "step": 5,
         "title": "Vos cernes",
         "subtitle": "Quelle couleur décrit le mieux la teinte de vos cernes ? (sans maquillage, en pleine lumière)",
+        "multi": True,
+        "max_select": 2,
         "weight": {"warmth": 2.0, "depth": 0.5, "chroma": 0},
         "options": [
             {"id": "undereye-blue",    "label": "Bleutés",            "sublabel": "Cernes nettement bleus ou violacés",          "hex": "#7878A8", "scores": {"warmth": -2.5, "depth": 2, "chroma": 0}},
